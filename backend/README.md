@@ -79,3 +79,17 @@ El resto de los métodos (`GET`, `PUT`, `DELETE`) y los demás dominios (`produc
 4. `models` no salen del repository / service.
 5. `schemas` solo en routers.
 6. Al cliente siempre va un DTO, nunca un Model.
+
+---
+
+## Documentación del proceso
+
+En la carpeta `docs-proceso/` (raíz del repo) hay un `.md` por cada HU implementada. Cada archivo describe los archivos tocados con el formato:
+
+```
+Archivo.py
+Descripción corta de qué hago.
+Líneas: x ~ y
+```
+
+Si la HU tocó frontend, los cambios de front van al final del mismo archivo.
