@@ -67,6 +67,7 @@ CREATE TABLE viajes (
     vehiculo_id INTEGER REFERENCES vehiculos(id),
     metodo_pago_id INTEGER NOT NULL REFERENCES metodos_pago(id),
     cupon_id INTEGER REFERENCES cupones(id),
+    categoria VARCHAR(20) NOT NULL CHECK (categoria IN ('economico', 'confort', 'premium')),
     origen TEXT NOT NULL,
     destino TEXT NOT NULL,
     distancia_km NUMERIC(10, 2) NOT NULL CHECK (distancia_km > 0),

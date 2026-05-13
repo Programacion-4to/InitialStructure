@@ -1,10 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from src.db.connection import get_db
+from src.dtos.metodo_pago_dto import MetodoPagoResponseDTO
 from src.dtos.pasajero_dto import CreatePasajeroDTO, PasajeroResponseDTO
+from src.dtos.viaje_dto import HistorialResponseDTO
 from src.schemas.pasajero_schema import CreatePasajeroSchema
+from src.services.metodo_pago_service import MetodoPagoService
 from src.services.pasajero_service import PasajeroService
+from src.services.viaje_service import ViajeService
 
 router = APIRouter(prefix="/pasajeros", tags=["pasajeros"])
 
@@ -43,3 +49,18 @@ def delete_pasajero(pasajero_id: int, db: Session = Depends(get_db)):
     deleted = PasajeroService(db).delete(pasajero_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pasajero no encontrado")
+
+
+@router.get("/{pasajero_id}/metodos-pago", response_model=list[MetodoPagoResponseDTO])
+def list_metodos_pago(pasajero_id: int, db: Session = Depends(get_db)):
+    return MetodoPagoService(db).list_by_pasajero(pasajero_id)
+
+
+@router.get("/{pasajero_id}/viajes", response_model=HistorialResponseDTO)
+def historial_pasajero(
+    pasajero_id: int,
+    desde: datetime | None = Query(default=None),
+    hasta: datetime | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    return ViajeService(db).historial_pasajero(pasajero_id, desde, hasta)
