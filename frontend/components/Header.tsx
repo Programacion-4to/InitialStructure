@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, Crown, Loader2, LogOut, Menu, Plus, Settings, User, X } from "lucide-react";
+import { useState } from "react";
+import { Menu, X, LogOut, User } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { ProfileCreateScreen } from "./ProfileCreateScreen";
 import { apiRequest, getAssetUrl, getSelectedProfile, logout, setSelectedProfile, MAX_UPLOAD_SIZE } from "@/lib/api";
@@ -9,96 +9,21 @@ import type { AuthAccount, Profile } from "@/lib/types";
 
 interface HeaderProps {
   activeSection: string;
-  account: AuthAccount;
   onNavigate: (section: string) => void;
   onLogout: () => void;
-  onProfileChanged: () => void;
 }
 
 const navItems = [
   { id: "inicio", label: "Inicio" },
+  { id: "catalogo", label: "Catalogo" },
   { id: "peliculas", label: "Peliculas" },
   { id: "series", label: "Series" },
   { id: "mi-lista", label: "Mi lista" },
 ];
 
-const planLimits: Record<string, number> = {
-  basico: 1,
-  estandar: 2,
-  premium: 5,
-};
-
-export function Header({ activeSection, account, onNavigate, onLogout, onProfileChanged }: HeaderProps) {
+export function Header({ activeSection, onNavigate, onLogout }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [selectedProfile, setSelectedProfileState] = useState(getSelectedProfile());
-  const [pinProfile, setPinProfile] = useState<Profile | null>(null);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const currentProfile = profiles.find((profile) => profile.id === selectedProfile?.id) || selectedProfile;
-  const canCreateProfile = profiles.length < planLimits[account.plan || ""] || !account.plan;
-
-  const loadProfiles = async () => {
-    const data = await apiRequest<Profile[]>(`/cuentas/${account.id}/perfiles`);
-    setProfiles(data);
-    const stored = getSelectedProfile();
-    const freshSelected = data.find((profile) => profile.id === stored?.id);
-    if (freshSelected) {
-      selectProfileLocally(freshSelected);
-    }
-  };
-
-  useEffect(() => {
-    loadProfiles().catch(() => setProfiles([]));
-  }, [account.id]);
-
-  const selectProfileLocally = (profile: Profile) => {
-    const storedProfile = { id: profile.id, nombre: profile.nombre, avatar: profile.avatar };
-    setSelectedProfile(storedProfile);
-    setSelectedProfileState(storedProfile);
-  };
-
-  const handleProfileClick = (profile: Profile) => {
-    setMessage(null);
-    if (profile.id === selectedProfile?.id) return;
-    if (profile.has_pin) {
-      setPinProfile(profile);
-      setPin("");
-      setPinError(null);
-      return;
-    }
-    selectProfileLocally(profile);
-    setProfileMenuOpen(false);
-    onProfileChanged();
-  };
-
-  const submitPin = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!pinProfile) return;
-    setPinError(null);
-    setLoading(true);
-    try {
-      await apiRequest(`/auth/perfiles/${pinProfile.id}`, {
-        method: "POST",
-        body: JSON.stringify({ pin: pin || null }),
-      });
-      selectProfileLocally(pinProfile);
-      setPinProfile(null);
-      setProfileMenuOpen(false);
-      onProfileChanged();
-    } catch (err) {
-      setPinError(err instanceof Error ? err.message : "PIN invalido");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const profile = getSelectedProfile();
 
   const handleLogout = () => {
     logout();
@@ -109,10 +34,12 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
     <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-b from-background to-transparent">
       <div className="px-4 md:px-8 py-4">
         <div className="flex items-center justify-between">
+          {/* Logo */}
           <button onClick={() => onNavigate("inicio")} className="shrink-0">
             <BrandLogo size="md" />
           </button>
 
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-6 ml-10">
             {navItems.map((item) => (
               <button
@@ -127,47 +54,31 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
             ))}
           </nav>
 
+          {/* Right side - Profile & Logout */}
           <div className="hidden md:flex items-center gap-4">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setProfileMenuOpen((open) => !open)}
-                className="flex items-center gap-2 rounded-md px-2 py-1 text-foreground transition-colors hover:bg-secondary"
-              >
-                <ProfileAvatar profile={currentProfile} size="sm" />
-                <span className="text-sm">{currentProfile?.nombre || "Perfil"}</span>
-              </button>
-              {profileMenuOpen && (
-                <ProfileMenu
-                  account={account}
-                  profiles={profiles}
-                  selectedProfileId={selectedProfile?.id}
-                  canCreateProfile={canCreateProfile}
-                  message={message}
-                  onProfileClick={handleProfileClick}
-                  onCreate={() => {
-                    setMessage(null);
-                    if (!canCreateProfile) {
-                      setMessage("Si quieres crear un nuevo perfil, mejora tu plan");
-                      return;
-                    }
-                    setCreateOpen(true);
-                    setProfileMenuOpen(false);
+            {profile && (
+              <div className="flex items-center gap-2 text-foreground">
+                <div 
+                  className="w-8 h-8 rounded flex items-center justify-center text-sm font-bold text-white"
+                  style={{
+                    background: `linear-gradient(135deg, #009246 0%, #009246 33%, #ffffff 33%, #ffffff 66%, #ce2b37 66%, #ce2b37 100%)`,
                   }}
-                  onSettings={() => {
-                    setSettingsOpen(true);
-                    setProfileMenuOpen(false);
-                  }}
-                  onUpgrade={() => {
-                    setUpgradeOpen(true);
-                    setProfileMenuOpen(false);
-                  }}
-                  onLogout={handleLogout}
-                />
-              )}
-            </div>
+                >
+                  {profile.nombre.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm">{profile.nombre}</span>
+              </div>
+            )}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:text-primary transition-colors"
+            >
+              <LogOut size={18} />
+              Salir
+            </button>
           </div>
 
+          {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="md:hidden text-foreground p-2"
@@ -177,6 +88,7 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
           </button>
         </div>
 
+        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="md:hidden mt-4 pb-4 border-t border-border">
             <nav className="flex flex-col gap-2 mt-4">
@@ -197,16 +109,23 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
                 </button>
               ))}
             </nav>
-            <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+            <div className="mt-4 pt-4 border-t border-border">
+              {profile && (
+                <div className="flex items-center gap-2 px-4 py-2 text-foreground">
+                  <User size={18} />
+                <span className="text-sm">
+                  {profile.nombre}
+                  {profile.es_infantil && (
+                    <span className="ml-1 text-xs text-tito-green">(Infantil)</span>
+                  )}
+                </span>
+                </div>
+              )}
               <button
-                onClick={() => setProfileMenuOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 text-foreground"
-              >
-                <ProfileAvatar profile={currentProfile} size="sm" />
-                <span className="text-sm">{currentProfile?.nombre || "Perfil"}</span>
-              </button>
-              <button
-                onClick={handleLogout}
+                onClick={() => {
+                  handleLogout();
+                  setMobileMenuOpen(false);
+                }}
                 className="flex items-center gap-2 px-4 py-2 text-foreground hover:text-primary transition-colors w-full"
               >
                 <LogOut size={18} />
@@ -216,64 +135,6 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
           </div>
         )}
       </div>
-
-      {pinProfile && (
-        <Modal title={`PIN de ${pinProfile.nombre}`} onClose={() => setPinProfile(null)}>
-          <form onSubmit={submitPin} className="grid gap-3">
-            <input
-              value={pin}
-              onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
-              className="admin-input"
-              placeholder="PIN de 4 digitos"
-              inputMode="numeric"
-              maxLength={4}
-              autoFocus
-            />
-            {pinError && <p className="text-sm text-primary">{pinError}</p>}
-            <button className="admin-button justify-center" disabled={loading}>
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-              Entrar
-            </button>
-          </form>
-        </Modal>
-      )}
-
-      {createOpen && (
-        <Modal title="Crear perfil" onClose={() => setCreateOpen(false)}>
-          <ProfileCreateScreen
-            accountId={account.id}
-            compact
-            onCancel={() => setCreateOpen(false)}
-            onProfileCreated={(profile) => {
-              setSelectedProfileState(profile);
-              setCreateOpen(false);
-              loadProfiles().finally(onProfileChanged);
-            }}
-          />
-        </Modal>
-      )}
-
-      {settingsOpen && (
-        <AccountSettingsModal
-          account={account}
-          profile={profiles.find((profile) => profile.id === selectedProfile?.id) || null}
-          onClose={() => setSettingsOpen(false)}
-          onSaved={() => {
-            loadProfiles().finally(onProfileChanged);
-          }}
-        />
-      )}
-
-      {upgradeOpen && (
-        <PlanUpgradeModal
-          account={account}
-          onClose={() => setUpgradeOpen(false)}
-          onUpgraded={() => {
-            setUpgradeOpen(false);
-            window.location.reload();
-          }}
-        />
-      )}
     </header>
   );
 }

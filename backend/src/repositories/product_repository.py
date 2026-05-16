@@ -1,7 +1,7 @@
 from sqlalchemy import func
 from sqlalchemy.orm import Session, aliased
 
-from src.db import Calificacion, Contenido, Episodio, Genero, Temporada, VideoVariant, Vista
+from src.db import Calificacion, Contenido, Episodio, Genero, Temporada, Vista
 
 
 class GeneroRepository:
@@ -45,13 +45,12 @@ class ContenidoRepository:
         anio: int,
         clasificacion_edad: str,
         descripcion: str | None = None,
-        duracion_min: float | None = None,
+        duracion_min: int | None = None,
         generos_ids: list[int] | None = None,
         storage_folder_id: str | None = None,
         video_storage_key: str | None = None,
         video_mime: str | None = None,
         video_size: int | None = None,
-        portada_url: str | None = None,
     ) -> Contenido:
         contenido = Contenido(
             titulo=titulo,
@@ -64,7 +63,6 @@ class ContenidoRepository:
             video_storage_key=video_storage_key,
             video_mime=video_mime,
             video_size=video_size,
-            portada_url=portada_url,
         )
 
         if generos_ids:
@@ -91,7 +89,6 @@ class ContenidoRepository:
         ordenar: str | None = None,
     ) -> list[Contenido]:
         query = self.db.query(Contenido)
-        needs_distinct = False
 
         if texto:
             query = query.filter(Contenido.titulo.ilike(f"%{texto}%"))
@@ -104,18 +101,13 @@ class ContenidoRepository:
 
         if genero_id:
             query = query.join(Contenido.generos).filter(Genero.id == genero_id)
-            needs_distinct = True
         elif genero:
             query = query.join(Contenido.generos).filter(Genero.nombre.ilike(genero))
-            needs_distinct = True
 
         if ordenar == "anio_desc":
             query = query.order_by(Contenido.anio.desc(), Contenido.titulo.asc())
         else:
             query = query.order_by(Contenido.titulo.asc())
-
-        if needs_distinct:
-            query = query.distinct()
 
         return query.all()
 
@@ -175,109 +167,6 @@ class ContenidoRepository:
         return True
 
 
-class VideoVariantRepository:
-    def __init__(self, db: Session):
-        self.db = db
-
-    def upsert_for_contenido(
-        self,
-        contenido_id: int,
-        quality: str,
-        video_storage_key: str,
-        video_mime: str | None,
-        video_size: int | None,
-    ) -> VideoVariant:
-        variant = (
-            self.db.query(VideoVariant)
-            .filter(VideoVariant.contenido_id == contenido_id, VideoVariant.quality == quality)
-            .first()
-        )
-        if not variant:
-            variant = VideoVariant(contenido_id=contenido_id, quality=quality)
-            self.db.add(variant)
-
-        variant.video_storage_key = video_storage_key
-        variant.video_mime = video_mime
-        variant.video_size = video_size
-        self.db.commit()
-        self.db.refresh(variant)
-        return variant
-
-    def replace_for_contenido(
-        self,
-        contenido_id: int,
-        variants: dict[str, dict],
-    ) -> None:
-        existing = (
-            self.db.query(VideoVariant)
-            .filter(VideoVariant.contenido_id == contenido_id)
-            .all()
-        )
-        for variant in existing:
-            if variant.quality not in variants:
-                self.db.delete(variant)
-
-        for quality, data in variants.items():
-            variant = next((item for item in existing if item.quality == quality), None)
-            if not variant:
-                variant = VideoVariant(contenido_id=contenido_id, quality=quality)
-                self.db.add(variant)
-            variant.video_storage_key = data["video_storage_key"]
-            variant.video_mime = data.get("video_mime")
-            variant.video_size = data.get("video_size")
-
-        self.db.commit()
-
-    def upsert_for_episodio(
-        self,
-        episodio_id: int,
-        quality: str,
-        video_storage_key: str,
-        video_mime: str | None,
-        video_size: int | None,
-    ) -> VideoVariant:
-        variant = (
-            self.db.query(VideoVariant)
-            .filter(VideoVariant.episodio_id == episodio_id, VideoVariant.quality == quality)
-            .first()
-        )
-        if not variant:
-            variant = VideoVariant(episodio_id=episodio_id, quality=quality)
-            self.db.add(variant)
-
-        variant.video_storage_key = video_storage_key
-        variant.video_mime = video_mime
-        variant.video_size = video_size
-        self.db.commit()
-        self.db.refresh(variant)
-        return variant
-
-    def replace_for_episodio(
-        self,
-        episodio_id: int,
-        variants: dict[str, dict],
-    ) -> None:
-        existing = (
-            self.db.query(VideoVariant)
-            .filter(VideoVariant.episodio_id == episodio_id)
-            .all()
-        )
-        for variant in existing:
-            if variant.quality not in variants:
-                self.db.delete(variant)
-
-        for quality, data in variants.items():
-            variant = next((item for item in existing if item.quality == quality), None)
-            if not variant:
-                variant = VideoVariant(episodio_id=episodio_id, quality=quality)
-                self.db.add(variant)
-            variant.video_storage_key = data["video_storage_key"]
-            variant.video_mime = data.get("video_mime")
-            variant.video_size = data.get("video_size")
-
-        self.db.commit()
-
-
 class TemporadaRepository:
     def __init__(self, db: Session):
         self.db = db
@@ -311,18 +200,6 @@ class TemporadaRepository:
             .all()
         )
 
-    def update(self, temporada_id: int, **fields) -> Temporada | None:
-        temporada = self.find_by_id(temporada_id)
-        if not temporada:
-            return None
-
-        for key, value in fields.items():
-            setattr(temporada, key, value)
-
-        self.db.commit()
-        self.db.refresh(temporada)
-        return temporada
-
     def delete(self, temporada_id: int) -> bool:
         temporada = self.find_by_id(temporada_id)
         if not temporada:
@@ -342,23 +219,19 @@ class EpisodioRepository:
         temporada_id: int,
         numero: int,
         titulo: str,
-        duracion_min: float,
-        storage_folder_id: str | None = None,
+        duracion_min: int,
         video_storage_key: str | None = None,
         video_mime: str | None = None,
         video_size: int | None = None,
-        thumbnail_url: str | None = None,
     ) -> Episodio:
         episodio = Episodio(
             temporada_id=temporada_id,
             numero=numero,
             titulo=titulo,
             duracion_min=duracion_min,
-            storage_folder_id=storage_folder_id,
             video_storage_key=video_storage_key,
             video_mime=video_mime,
             video_size=video_size,
-            thumbnail_url=thumbnail_url,
         )
         self.db.add(episodio)
         self.db.commit()
@@ -375,18 +248,6 @@ class EpisodioRepository:
             .order_by(Episodio.numero)
             .all()
         )
-
-    def update(self, episodio_id: int, **fields) -> Episodio | None:
-        episodio = self.find_by_id(episodio_id)
-        if not episodio:
-            return None
-
-        for key, value in fields.items():
-            setattr(episodio, key, value)
-
-        self.db.commit()
-        self.db.refresh(episodio)
-        return episodio
 
     def delete(self, episodio_id: int) -> bool:
         episodio = self.find_by_id(episodio_id)

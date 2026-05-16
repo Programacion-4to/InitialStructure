@@ -1,4 +1,5 @@
 // API configuration and utility functions for TITOFLIX
+// Aligned with backend routers: auth_router, user_router, product_router
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 const DIRECT_API_BASE_URL = process.env.NEXT_PUBLIC_DIRECT_API_URL || "/api/v1";
@@ -11,48 +12,25 @@ export function getApiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
 
-export function getDirectApiUrl(path: string): string {
-  return `${DIRECT_API_BASE_URL}${path}`;
-}
-
 export function getBackendUrl(path: string): string {
-  // Handle relative stream URLs
-  if (path.startsWith("http")) {
-    return path;
-  }
+  if (path.startsWith("http")) return path;
   return `${BACKEND_BASE_URL}${path}`;
-}
-
-export function getAssetUrl(path: string | null | undefined): string | null {
-  if (!path) {
-    return null;
-  }
-  if (path.startsWith("http") || path.startsWith("data:")) {
-    return path;
-  }
-  if (path.startsWith("assets/")) {
-    return getApiUrl(`/assets/${encodeURI(path.slice("assets/".length))}`);
-  }
-  return path;
 }
 
 export function getAuthHeaders(): HeadersInit {
   if (typeof window === "undefined") return {};
   const token = localStorage.getItem("titoflix_token");
   if (!token) return {};
-  return {
-    Authorization: `Bearer ${token}`,
-  };
+  return { Authorization: `Bearer ${token}` };
 }
 
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const isFormData = options.body instanceof FormData;
   const url = getApiUrl(path);
-  const hasBody = options.body !== undefined && options.body !== null;
   const headers: HeadersInit = {
+    "Content-Type": "application/json",
     ...getAuthHeaders(),
     ...options.headers,
   };
@@ -106,45 +84,24 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      const error = await response.json().catch(() => null);
-      const detail = Array.isArray(error?.detail)
-        ? error.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(". ")
-        : error?.detail;
-      throw new Error(error?.message || detail || `Error ${response.status}`);
-    }
-
-    const text = await response.text().catch(() => "");
-    throw new Error(text.trim() || `Error ${response.status}`);
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "Error desconocido" }));
+    const err = new Error(error.detail || `Error ${response.status}`);
+    (err as ApiError).status = response.status;
+    throw err;
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    return undefined as T;
-  }
-
+  // Handle 204 No Content
+  if (response.status === 204) return undefined as T;
   return response.json();
 }
 
-// Registration
-export async function register(email: string, password: string, plan: "basico" | "estandar" | "premium"): Promise<void> {
-  await apiRequest("/cuentas/", {
-    method: "POST",
-    body: JSON.stringify({ email, password, plan }),
-  });
+export interface ApiError extends Error {
+  status?: number;
 }
 
-// Auth
-export type StoredAccount = {
-  id?: number;
-  email: string;
-  is_admin: boolean;
-};
+// ─── Auth state helpers ─────────────────────────────────────────────────────
 
 export function isAuthenticated(): boolean {
   if (typeof window === "undefined") return false;
@@ -164,34 +121,15 @@ export function removeToken(): void {
   localStorage.removeItem("titoflix_token");
 }
 
-export function getStoredAccount(): StoredAccount | null {
+// ─── Profile state helpers ──────────────────────────────────────────────────
+
+export function getSelectedProfile(): Perfil | null {
   if (typeof window === "undefined") return null;
-  const account = localStorage.getItem("titoflix_account");
-  return account ? JSON.parse(account) : null;
+  const raw = localStorage.getItem("titoflix_profile");
+  return raw ? JSON.parse(raw) : null;
 }
 
-export function setStoredAccount(account: StoredAccount): void {
-  localStorage.setItem("titoflix_account", JSON.stringify(account));
-}
-
-export function removeStoredAccount(): void {
-  localStorage.removeItem("titoflix_account");
-}
-
-// Profile
-export type StoredProfile = {
-  id: number;
-  nombre: string;
-  avatar?: string | null;
-};
-
-export function getSelectedProfile(): StoredProfile | null {
-  if (typeof window === "undefined") return null;
-  const profile = localStorage.getItem("titoflix_profile");
-  return profile ? JSON.parse(profile) : null;
-}
-
-export function setSelectedProfile(profile: StoredProfile): void {
+export function setSelectedProfile(profile: Perfil): void {
   localStorage.setItem("titoflix_profile", JSON.stringify(profile));
 }
 
@@ -199,8 +137,211 @@ export function removeSelectedProfile(): void {
   localStorage.removeItem("titoflix_profile");
 }
 
+// Store cuenta_id so we can fetch profiles for the logged-in user
+export function getCuentaId(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("titoflix_cuenta_id");
+  return raw ? Number(raw) : null;
+}
+
+export function setCuentaId(id: number): void {
+  localStorage.setItem("titoflix_cuenta_id", String(id));
+}
+
 export function logout(): void {
   removeToken();
-  removeStoredAccount();
   removeSelectedProfile();
+  localStorage.removeItem("titoflix_cuenta_id");
+}
+
+// ─── Auth endpoints (/auth) ─────────────────────────────────────────────────
+
+export async function login(
+  email: string,
+  password: string
+): Promise<TokenResponse> {
+  return apiRequest<TokenResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function authPerfil(
+  perfilId: number,
+  pin?: string | null
+): Promise<{ message: string; perfil_id: number; cuenta_id: number }> {
+  return apiRequest(`/auth/perfiles/${perfilId}`, {
+    method: "POST",
+    body: JSON.stringify({ pin: pin ?? null }),
+  });
+}
+
+// ─── Cuentas endpoints (/cuentas) ───────────────────────────────────────────
+
+export async function register(
+  email: string,
+  password: string,
+  plan: "basico" | "estandar" | "premium"
+): Promise<CuentaResponse> {
+  return apiRequest<CuentaResponse>("/cuentas/", {
+    method: "POST",
+    body: JSON.stringify({ email, password, plan }),
+  });
+}
+
+export async function getPerfilesByCuenta(
+  cuentaId: number
+): Promise<Perfil[]> {
+  return apiRequest<Perfil[]>(`/cuentas/${cuentaId}/perfiles`);
+}
+
+// ─── Generos (/generos) ─────────────────────────────────────────────────────
+
+export async function listGeneros(): Promise<Genero[]> {
+  return apiRequest<Genero[]>("/generos");
+}
+
+// ─── Contenidos (/contenidos) ───────────────────────────────────────────────
+
+export interface SearchParams {
+  q?: string;
+  tipo?: string;
+  genero?: string;
+  genero_id?: number;
+  perfil_id?: number;
+  ordenar?: string;
+}
+
+export async function searchContenidos(
+  params: SearchParams = {}
+): Promise<Contenido[]> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.tipo) qs.set("tipo", params.tipo);
+  if (params.genero) qs.set("genero", params.genero);
+  if (params.genero_id) qs.set("genero_id", String(params.genero_id));
+  if (params.perfil_id) qs.set("perfil_id", String(params.perfil_id));
+  if (params.ordenar) qs.set("ordenar", params.ordenar);
+  const query = qs.toString();
+  return apiRequest<Contenido[]>(`/contenidos${query ? `?${query}` : ""}`);
+}
+
+export async function getContenido(id: number): Promise<Contenido> {
+  return apiRequest<Contenido>(`/contenidos/${id}`);
+}
+
+export async function getTopContenidos(
+  genero?: string
+): Promise<Contenido[]> {
+  const qs = genero ? `?genero=${encodeURIComponent(genero)}` : "";
+  return apiRequest<Contenido[]>(`/contenidos/top${qs}`);
+}
+
+export async function getPlayback(
+  contenidoId: number
+): Promise<PlaybackResponse> {
+  return apiRequest<PlaybackResponse>(
+    `/contenidos/${contenidoId}/playback`
+  );
+}
+
+// ─── Temporadas & Episodios ─────────────────────────────────────────────────
+
+export async function getTemporadas(
+  contenidoId: number
+): Promise<Temporada[]> {
+  return apiRequest<Temporada[]>(
+    `/contenidos/${contenidoId}/temporadas`
+  );
+}
+
+export async function getEpisodios(
+  temporadaId: number
+): Promise<Episodio[]> {
+  return apiRequest<Episodio[]>(
+    `/temporadas/${temporadaId}/episodios`
+  );
+}
+
+export async function getEpisodioPlayback(
+  episodioId: number
+): Promise<PlaybackResponse> {
+  return apiRequest<PlaybackResponse>(
+    `/episodios/${episodioId}/playback`
+  );
+}
+
+// ─── Vistas (progress) (/perfiles/:id/vistas) ──────────────────────────────
+
+export async function upsertVista(
+  perfilId: number,
+  body: {
+    contenido_id?: number | null;
+    episodio_id?: number | null;
+    segundos_vistos: number;
+    terminado?: boolean;
+  }
+): Promise<Vista> {
+  return apiRequest<Vista>(`/perfiles/${perfilId}/vistas`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getContinuarViendo(
+  perfilId: number
+): Promise<Vista[]> {
+  return apiRequest<Vista[]>(`/perfiles/${perfilId}/continuar`);
+}
+
+// ─── Mi Lista (/perfiles/:id/mi-lista) ─────────────────────────────────────
+
+export async function getMiLista(perfilId: number): Promise<Contenido[]> {
+  return apiRequest<Contenido[]>(`/perfiles/${perfilId}/mi-lista`);
+}
+
+export async function addToMiLista(
+  perfilId: number,
+  contenidoId: number
+): Promise<Contenido[]> {
+  return apiRequest<Contenido[]>(
+    `/perfiles/${perfilId}/mi-lista?contenido_id=${contenidoId}`,
+    { method: "POST" }
+  );
+}
+
+export async function removeFromMiLista(
+  perfilId: number,
+  contenidoId: number
+): Promise<Contenido[]> {
+  return apiRequest<Contenido[]>(
+    `/perfiles/${perfilId}/mi-lista/${contenidoId}`,
+    { method: "DELETE" }
+  );
+}
+
+// ─── Calificaciones (/perfiles/:id/calificaciones/:contenido_id) ────────────
+
+export async function upsertCalificacion(
+  perfilId: number,
+  contenidoId: number,
+  puntaje: number
+): Promise<Calificacion> {
+  return apiRequest<Calificacion>(
+    `/perfiles/${perfilId}/calificaciones/${contenidoId}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ puntaje }),
+    }
+  );
+}
+
+export async function deleteCalificacion(
+  perfilId: number,
+  contenidoId: number
+): Promise<void> {
+  return apiRequest<void>(
+    `/perfiles/${perfilId}/calificaciones/${contenidoId}`,
+    { method: "DELETE" }
+  );
 }

@@ -5,7 +5,6 @@ from src.db.models.product_model import (                    # Modelos de produc
     Episodio,                                                # Modelo de episodio
     Genero,                                                  # Modelo de género
     Temporada,                                               # Modelo de temporada
-    VideoVariant,
     Vista,                                                   # Modelo de vista
     contenido_generos,                                       # Tabla relacional contenido-género
     mi_lista,                                                # Tabla relacional perfil-contenido
@@ -18,7 +17,6 @@ __all__ = [
     "Contenido",                                             # Exporta modelo Contenido
     "Temporada",                                             # Exporta modelo Temporada
     "Episodio",                                              # Exporta modelo Episodio
-    "VideoVariant",
     "Vista",                                                 # Exporta modelo Vista
     "Calificacion",                                          # Exporta modelo Calificación
     "contenido_generos",                                     # Exporta tabla relacional

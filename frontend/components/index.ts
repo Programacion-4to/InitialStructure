@@ -1,10 +1,17 @@
 export { BrandLogo } from "./BrandLogo";
 export { LoginScreen } from "./LoginScreen";
 export { ProfileSelector } from "./ProfileSelector";
-export { ProfileCreateScreen } from "./ProfileCreateScreen";
 export { Header } from "./Header";
 export { Hero } from "./Hero";
 export { ContentCard, ContentCardSkeleton } from "./ContentCard";
 export { ContentRow } from "./ContentRow";
+export { ContentGrid } from "./ContentGrid";
 export { ContentDetail } from "./ContentDetail";
 export { VideoPlayer } from "./VideoPlayer";
+export { SearchFilters } from "./SearchFilters";
+export { RatingStars } from "./RatingStars";
+export { ProgressBar } from "./ProgressBar";
+export { CatalogPage } from "./CatalogPage";
+export { ContinueWatchingRow } from "./ContinueWatchingRow";
+export { RecommendationRow } from "./RecommendationRow";
+export { TopContentRow } from "./TopContentRow";

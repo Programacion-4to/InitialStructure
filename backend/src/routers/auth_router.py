@@ -1,48 +1,30 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends                              # Importa utilidades de rutas y dependencias
+from sqlalchemy.orm import Session                                  # Importa el tipado para la sesión de BD
 
-from src.db import get_db
-from src.db.models import Cuenta
-from src.dtos import AdminLoginDTO, AuthAccountDTO, LoginDTO, PerfilAuthDTO, PerfilAuthResponseDTO, TokenDTO
-from src.middlewares import get_current_user_from_swagger
-from src.schemas import AuthAccountSchema, LoginSchema, PerfilAuthResponseSchema, PerfilAuthSchema, TokenSchema
-from src.schemas.auth_schema import AdminLoginSchema
-from src.services import AuthService
+from src.db import get_db                                           # Importa la función para obtener la sesión
+from src.db.models import Cuenta                                    # Importa el modelo de cuenta autenticada
+from src.dtos import LoginDTO, PerfilAuthDTO, PerfilAuthResponseDTO, TokenDTO # Importa objetos de transferencia de datos
+from src.middlewares import get_current_user_from_swagger           # Dependencia para validar el JWT de cuenta
+from src.schemas import LoginSchema, PerfilAuthResponseSchema, PerfilAuthSchema, TokenSchema # Importa esquemas de validación Pydantic
+from src.services import AuthService                                # Importa el servicio de autenticación
 
-
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])                   # Define el router con prefijo y etiquetas
 
 
-@router.post("/login", response_model=TokenSchema)
-def login(payload: LoginSchema, db: Session = Depends(get_db)):
-    dto = LoginDTO(**payload.model_dump())
-    token: TokenDTO = AuthService(db).login(dto)
-    return TokenSchema(**token.model_dump())
+@router.post("/login", response_model=TokenSchema)                  # Endpoint para inicio de sesión de cuenta
+def login(payload: LoginSchema, db: Session = Depends(get_db)):     # Recibe credenciales y la sesión de BD
+    dto = LoginDTO(**payload.model_dump())                          # Convierte el esquema validado en DTO
+    token: TokenDTO = AuthService(db).login(dto)                    # Ejecuta la lógica de login en el servicio
+    return TokenSchema(**token.model_dump())                        # Retorna el token mapeado al esquema
 
 
-@router.post("/admin-login", response_model=TokenSchema)
-def admin_login(payload: AdminLoginSchema, db: Session = Depends(get_db)):
-    dto = AdminLoginDTO(**payload.model_dump())
-    token: TokenDTO = AuthService(db).admin_login(dto)
-    return TokenSchema(**token.model_dump())
-
-
-@router.get("/me", response_model=AuthAccountSchema)
-def me(
-    current_user: Cuenta = Depends(get_current_user_from_swagger),
-    db: Session = Depends(get_db),
-):
-    account: AuthAccountDTO = AuthService(db).get_current_account(current_user.id)
-    return AuthAccountSchema(**account.model_dump())
-
-
-@router.post("/perfiles/{perfil_id}", response_model=PerfilAuthResponseSchema)
+@router.post("/perfiles/{perfil_id}", response_model=PerfilAuthResponseSchema) # Endpoint para acceso a un perfil específico
 def auth_perfil(
-    perfil_id: int,
-    payload: PerfilAuthSchema,
-    current_user: Cuenta = Depends(get_current_user_from_swagger),
-    db: Session = Depends(get_db),
+    perfil_id: int,                                                 # ID del perfil enviado en la URL
+    payload: PerfilAuthSchema,                                      # Esquema que puede contener el PIN
+    current_user: Cuenta = Depends(get_current_user_from_swagger),  # Valida que la cuenta esté autenticada
+    db: Session = Depends(get_db),                                  # Inyecta la sesión de la base de datos
 ):
-    dto = PerfilAuthDTO(**payload.model_dump())
-    response: PerfilAuthResponseDTO = AuthService(db).auth_perfil(current_user.id, perfil_id, dto)
-    return PerfilAuthResponseSchema(**response.model_dump())
+    dto = PerfilAuthDTO(**payload.model_dump())                     # Mapea los datos de entrada a DTO
+    response: PerfilAuthResponseDTO = AuthService(db).auth_perfil(current_user.id, perfil_id, dto) # Valida acceso al perfil
+    return PerfilAuthResponseSchema(**response.model_dump())         # Retorna confirmación sin token

@@ -20,6 +20,7 @@ class CreateContenidoSchema(BaseModel):
     tipo: TipoContenido
     anio: int = Field(ge=1900)
     descripcion: str | None = None
+    duracion_min: int | None = Field(default=None, gt=0)
     clasificacion_edad: ClasificacionEdad
     generos_ids: list[int] = Field(default_factory=list)
 
@@ -29,6 +30,7 @@ class UpdateContenidoSchema(BaseModel):
     tipo: TipoContenido | None = None
     anio: int | None = Field(default=None, ge=1900)
     descripcion: str | None = None
+    duracion_min: int | None = Field(default=None, gt=0)
     clasificacion_edad: ClasificacionEdad | None = None
     generos_ids: list[int] | None = None
 
@@ -39,7 +41,7 @@ class ContenidoSchema(BaseModel):
     tipo: TipoContenido
     anio: int
     descripcion: str | None = None
-    duracion_min: float | None = None
+    duracion_min: int | None = None
     clasificacion_edad: ClasificacionEdad
     promedio_calificaciones: float | None = None
 
@@ -52,20 +54,11 @@ class CreateTemporadaSchema(BaseModel):
     anio: int = Field(ge=1900)
 
 
-class UpdateTemporadaSchema(BaseModel):
-    numero: int | None = Field(default=None, ge=1)
-    anio: int | None = Field(default=None, ge=1900)
-
-
 class CreateEpisodioSchema(BaseModel):
     temporada_id: int
     numero: int = Field(ge=1)
     titulo: str = Field(min_length=1)
-
-
-class UpdateEpisodioSchema(BaseModel):
-    numero: int | None = Field(default=None, ge=1)
-    titulo: str | None = Field(default=None, min_length=1)
+    duracion_min: int = Field(gt=0)
 
 
 class UpsertVistaSchema(BaseModel):

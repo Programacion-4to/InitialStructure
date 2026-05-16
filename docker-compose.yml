@@ -46,7 +46,7 @@ services:
     build:
       context: ./backend
     container_name: titoflix-backend
-    environment:
+    environment:s
       ENVIRONMENT: ${ENVIRONMENT:-production}
       HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-8000}

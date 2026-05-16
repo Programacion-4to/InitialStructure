@@ -2,7 +2,6 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from src.config.env import settings
-from src.utils.hash import hash_password
 
 
 engine = create_engine(settings.DATABASE_URL)
@@ -24,10 +23,6 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
     ensure_account_admin_column()
     ensure_storage_media_columns()
-    ensure_asset_media_columns()
-    ensure_duration_columns_are_float()
-    ensure_video_variant_quality_values()
-    ensure_default_admin_account()
     print("Tablas creadas exitosamente")
 
 
@@ -75,8 +70,6 @@ def ensure_storage_media_columns():
 
     if "episodios" in table_columns:
         columns = table_columns["episodios"]
-        if "storage_folder_id" not in columns:
-            statements.append("ALTER TABLE episodios ADD COLUMN storage_folder_id VARCHAR")
         if "video_storage_key" not in columns:
             statements.append("ALTER TABLE episodios ADD COLUMN video_storage_key VARCHAR")
         if "video_mime" not in columns:
@@ -90,123 +83,6 @@ def ensure_storage_media_columns():
     with engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
-
-
-def ensure_duration_columns_are_float():
-    """Permite guardar duraciones autodetectadas con decimales de minuto."""
-    if engine.dialect.name != "postgresql":
-        return
-
-    inspector = inspect(engine)
-    statements = []
-    for table_name in ("contenidos", "episodios"):
-        if not inspector.has_table(table_name):
-            continue
-
-        columns = {
-            column["name"]: str(column["type"]).lower()
-            for column in inspector.get_columns(table_name)
-        }
-        column_type = columns.get("duracion_min", "")
-        if column_type and "double" not in column_type and "float" not in column_type:
-            statements.append(
-                f"ALTER TABLE {table_name} "
-                "ALTER COLUMN duracion_min TYPE DOUBLE PRECISION "
-                "USING duracion_min::double precision"
-            )
-
-    if not statements:
-        return
-
-    with engine.begin() as connection:
-        for statement in statements:
-            connection.execute(text(statement))
-
-
-def ensure_asset_media_columns():
-    """Agrega columnas para imagenes de catalogo si la BD ya existia."""
-    inspector = inspect(engine)
-    statements = []
-
-    if inspector.has_table("contenidos"):
-        columns = {column["name"] for column in inspector.get_columns("contenidos")}
-        if "portada_url" not in columns:
-            statements.append("ALTER TABLE contenidos ADD COLUMN portada_url VARCHAR")
-
-    if inspector.has_table("episodios"):
-        columns = {column["name"] for column in inspector.get_columns("episodios")}
-        if "thumbnail_url" not in columns:
-            statements.append("ALTER TABLE episodios ADD COLUMN thumbnail_url VARCHAR")
-
-    if not statements:
-        return
-
-    with engine.begin() as connection:
-        for statement in statements:
-            connection.execute(text(statement))
-
-
-def ensure_video_variant_quality_values():
-    """Alinea las calidades guardadas con las variantes generadas por FFmpeg."""
-    inspector = inspect(engine)
-    if not inspector.has_table("video_variants"):
-        return
-
-    with engine.begin() as connection:
-        connection.execute(text("UPDATE video_variants SET quality = 'FHD' WHERE quality = 'HD'"))
-        connection.execute(text("UPDATE video_variants SET quality = 'QHD' WHERE quality = '1440p'"))
-        if engine.dialect.name != "postgresql":
-            return
-
-        connection.execute(text("ALTER TABLE video_variants DROP CONSTRAINT IF EXISTS ck_video_variant_quality"))
-        connection.execute(
-            text(
-                "ALTER TABLE video_variants "
-                "ADD CONSTRAINT ck_video_variant_quality "
-                "CHECK (quality IN ('FHD', 'QHD', '4K'))"
-            )
-        )
-
-
-def ensure_default_admin_account():
-    """Crea o actualiza la cuenta admin fija para desarrollo."""
-    inspector = inspect(engine)
-    if not inspector.has_table("cuentas"):
-        return
-
-    password_hash = hash_password(settings.ADMIN_PASSWORD)
-    with engine.begin() as connection:
-        existing = connection.execute(
-            text("SELECT id FROM cuentas WHERE email = :email"),
-            {"email": settings.ADMIN_USERNAME},
-        ).first()
-
-        if existing:
-            connection.execute(
-                text(
-                    "UPDATE cuentas "
-                    "SET password_hash = :password_hash, plan = :plan, is_admin = TRUE "
-                    "WHERE email = :email"
-                ),
-                {
-                    "email": settings.ADMIN_USERNAME,
-                    "password_hash": password_hash,
-                    "plan": "premium",
-                },
-            )
-            return
-
-        connection.execute(
-            text(
-                "INSERT INTO cuentas (email, password_hash, plan, is_admin) "
-                "VALUES (:email, :password_hash, :plan, TRUE)"
-            ),
-            {
-                "email": settings.ADMIN_USERNAME,
-                "password_hash": password_hash,
-                "plan": "premium",
-            },
-        )
 
 
 def drop_tables():

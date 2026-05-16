@@ -16,7 +16,7 @@ echo 5. Ver consola de postgres
 echo 6. Ver consola de MinIO
 echo 7. Detener servicios
 echo 8. Reconstruir e iniciar
-echo 9. Resetear tablas de Postgres y buckets de MinIO
+echo 9. Resetear tablas de Postgres
 echo 10. Salir
 echo.
 set /p option=Elegi una opcion: 
@@ -74,11 +74,10 @@ goto menu
 :reset_db
 echo.
 echo Esto elimina y vuelve a crear todas las tablas de Postgres.
-echo Tambien elimina y recrea el bucket titoflix-media de MinIO.
+echo Los archivos cargados en MinIO no se borran.
 set /p confirm=Escribi RESET para confirmar: 
 if not "%confirm%"=="RESET" goto menu
 docker compose exec backend python -c "from src.db import reset_database; reset_database()"
-docker compose run --rm --entrypoint /bin/sh minio-init -c "until mc alias set local http://minio:9000 titoflix titoflix-secret; do sleep 2; done && mc rb --force local/titoflix-media || true && mc mb --ignore-existing local/titoflix-media"
 pause
 goto menu
 
