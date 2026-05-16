@@ -63,6 +63,12 @@ export interface PlaybackResponse {
   mime_type: string;
 }
 
+export interface VideoVariant {
+  quality: string;
+  url: string;
+  mime_type: string;
+}
+
 // Auth
 export interface TokenResponse {
   access_token: string;

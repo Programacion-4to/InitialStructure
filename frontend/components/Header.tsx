@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, X, LogOut, User } from "lucide-react";
+import { Menu, X, LogOut, User, Check, Plus, Settings, Crown, Loader2 } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { ProfileCreateScreen } from "./ProfileCreateScreen";
 import { apiRequest, getAssetUrl, getSelectedProfile, logout, setSelectedProfile, MAX_UPLOAD_SIZE } from "@/lib/api";
-import type { AuthAccount, Profile } from "@/lib/types";
+import type { CuentaResponse, Perfil } from "@/lib/types";
 
 interface HeaderProps {
   activeSection: string;
@@ -151,12 +151,12 @@ function ProfileMenu({
   onUpgrade,
   onLogout,
 }: {
-  account: AuthAccount;
-  profiles: Profile[];
+  account: CuentaResponse;
+  profiles: Perfil[];
   selectedProfileId?: number;
   canCreateProfile: boolean;
   message: string | null;
-  onProfileClick: (profile: Profile) => void;
+  onProfileClick: (profile: Perfil) => void;
   onCreate: () => void;
   onSettings: () => void;
   onUpgrade: () => void;
@@ -249,7 +249,7 @@ function PlanUpgradeModal({
   onClose,
   onUpgraded,
 }: {
-  account: AuthAccount;
+  account: CuentaResponse;
   onClose: () => void;
   onUpgraded: () => void;
 }) {
@@ -331,8 +331,8 @@ function AccountSettingsModal({
   onClose,
   onSaved,
 }: {
-  account: AuthAccount;
-  profile: Profile | null;
+  account: CuentaResponse;
+  profile: Perfil | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -373,7 +373,7 @@ function AccountSettingsModal({
         }),
       });
       if (profile) {
-        const updated = await apiRequest<Profile>(`/cuentas/perfiles/${profile.id}`, {
+        const updated = await apiRequest<Perfil>(`/cuentas/perfiles/${profile.id}`, {
           method: "PUT",
           body: JSON.stringify({
             nombre: name,
@@ -381,7 +381,7 @@ function AccountSettingsModal({
             avatar,
           }),
         });
-        setSelectedProfile({ id: updated.id, nombre: updated.nombre, avatar: updated.avatar });
+        setSelectedProfile(updated);
       }
       onSaved();
       onClose();

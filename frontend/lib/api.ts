@@ -1,6 +1,19 @@
 // API configuration and utility functions for TITOFLIX
 // Aligned with backend routers: auth_router, user_router, product_router
 
+import type {
+  TokenResponse,
+  CuentaResponse,
+  Perfil,
+  Contenido,
+  Temporada,
+  Episodio,
+  PlaybackResponse,
+  Vista,
+  Calificacion,
+  Genero,
+} from "./types";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 const DIRECT_API_BASE_URL = process.env.NEXT_PUBLIC_DIRECT_API_URL || "/api/v1";
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
@@ -17,6 +30,15 @@ export function getBackendUrl(path: string): string {
   return `${BACKEND_BASE_URL}${path}`;
 }
 
+// Resolve an asset URL (avatar, portada, thumbnail, etc.) — if the value is
+// already an absolute URL or a data-URI, return it as-is; otherwise prefix with
+// the backend base URL so relative paths like /uploads/... work correctly.
+export function getAssetUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.startsWith("http") || value.startsWith("data:")) return value;
+  return `${BACKEND_BASE_URL}${value}`;
+}
+
 export function getAuthHeaders(): HeadersInit {
   if (typeof window === "undefined") return {};
   const token = localStorage.getItem("titoflix_token");
@@ -29,8 +51,9 @@ export async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = getApiUrl(path);
+  const hasBody = !!options.body;
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: HeadersInit = {
-    "Content-Type": "application/json",
     ...getAuthHeaders(),
     ...options.headers,
   };

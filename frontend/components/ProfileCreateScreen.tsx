@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { apiRequest, getAssetUrl, setSelectedProfile, MAX_UPLOAD_SIZE } from "@/lib/api";
-import type { Profile } from "@/lib/types";
+import type { Perfil } from "@/lib/types";
 
 interface ProfileCreateScreenProps {
   accountId: number;
@@ -55,7 +55,7 @@ export function ProfileCreateScreen({ accountId, onProfileCreated, onCancel, com
 
     setLoading(true);
     try {
-      const profile = await apiRequest<Profile>("/cuentas/perfiles", {
+      const profile = await apiRequest<Perfil>("/cuentas/perfiles", {
         method: "POST",
         body: JSON.stringify({
           nombre: cleanName,
