@@ -1,27 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Check } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
-import { apiRequest, register, setStoredAccount, setToken } from "@/lib/api";
-import type { AuthResponse } from "@/lib/types";
+import { apiRequest, setToken, register, setCuentaId } from "@/lib/api";
+import type { TokenResponse } from "@/lib/types";
 
 type Mode = "login" | "register";
-type RegisterStep = "data" | "plan";
 type PlanType = "basico" | "estandar" | "premium";
+
+function parseJwtPayload(token: string): Record<string, unknown> {
+  try {
+    const base64 = token.split(".")[1];
+    const json = atob(base64);
+    return JSON.parse(json);
+  } catch {
+    return {};
+  }
+}
 
 const PLANS: { id: PlanType; label: string; description: string; features: string[] }[] = [
   {
     id: "basico",
     label: "Basico",
     description: "Para empezar",
-    features: ["1 perfil", "Calidad FHD", "Sin descargas"],
+    features: ["1 perfil", "Calidad HD", "Sin descargas"],
   },
   {
     id: "estandar",
     label: "Estandar",
     description: "Lo mas popular",
-    features: ["2 perfiles", "Calidad QHD", "Descargas incluidas con tope"],
+    features: ["2 perfiles", "Calidad 1440p", "Descargas incluidas con tope"],
   },
   {
     id: "premium",
@@ -32,7 +41,7 @@ const PLANS: { id: PlanType; label: string; description: string; features: strin
 ];
 
 interface LoginScreenProps {
-  onLoginSuccess: (options?: { admin?: boolean }) => void;
+  onLoginSuccess: () => void;
 }
 
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
@@ -48,13 +57,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [regPassword, setRegPassword] = useState("");
   const [regConfirm, setRegConfirm] = useState("");
   const [showRegPassword, setShowRegPassword] = useState(false);
-  const [registerStep, setRegisterStep] = useState<RegisterStep>("data");
   const [selectedPlan, setSelectedPlan] = useState<PlanType>("estandar");
   const [registerSuccess, setRegisterSuccess] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [adminLoading, setAdminLoading] = useState(false);
-  const [adminError, setAdminError] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,7 +66,6 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const switchMode = (next: Mode) => {
     setMode(next);
     setError(null);
-    setRegisterStep("data");
     setRegisterSuccess(false);
   };
 
@@ -72,18 +75,18 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setLoading(true);
 
     try {
-      const response = await apiRequest<AuthResponse>("/auth/login", {
+      const response = await apiRequest<TokenResponse>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
 
       setToken(response.access_token);
-      setStoredAccount({
-        id: response.id,
-        email: response.email || email,
-        is_admin: Boolean(response.is_admin),
-      });
-      onLoginSuccess({ admin: Boolean(response.is_admin) });
+      // Extract cuenta_id from JWT payload
+      const payload = parseJwtPayload(response.access_token);
+      if (payload.sub) {
+        setCuentaId(Number(payload.sub));
+      }
+      onLoginSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al iniciar sesion");
     } finally {
@@ -104,49 +107,16 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       return;
     }
 
-    setRegisterStep("plan");
-  };
-
-  const handlePlanSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
     setLoading(true);
-
     try {
       await register(regEmail, regPassword, selectedPlan);
       setRegisterSuccess(true);
+      // Pre-fill login email for convenience
       setEmail(regEmail);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrarse");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError(null);
-    setAdminLoading(true);
-
-    try {
-      const response = await apiRequest<AuthResponse>("/auth/admin-login", {
-        method: "POST",
-        body: JSON.stringify({
-          password: adminPassword,
-        }),
-      });
-
-      setToken(response.access_token);
-      setStoredAccount({
-        id: response.id,
-        email: response.email || "admin",
-        is_admin: Boolean(response.is_admin),
-      });
-      onLoginSuccess({ admin: true });
-    } catch (err) {
-      setAdminError(err instanceof Error ? err.message : "Error al iniciar como admin");
-    } finally {
-      setAdminLoading(false);
     }
   };
 
@@ -272,8 +242,39 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           )}
 
           {/* ---- REGISTER FORM ---- */}
-          {mode === "register" && registerStep === "data" && !registerSuccess && (
+          {mode === "register" && !registerSuccess && (
             <form onSubmit={handleRegister} className="flex flex-col gap-5">
+              {/* Plan selector */}
+              <div>
+                <p className="text-sm font-medium text-foreground mb-3">Elegí tu plan</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {PLANS.map((plan) => (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      onClick={() => setSelectedPlan(plan.id)}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all text-left ${
+                        selectedPlan === plan.id
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-secondary hover:border-primary/50"
+                      }`}
+                    >
+                      <span className="text-sm font-semibold text-foreground">{plan.label}</span>
+                      <span className="text-xs text-muted-foreground text-center leading-tight">{plan.description}</span>
+                    </button>
+                  ))}
+                </div>
+                {/* Plan features */}
+                <ul className="mt-3 flex flex-col gap-1">
+                  {PLANS.find((p) => p.id === selectedPlan)?.features.map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Check size={12} className="text-primary shrink-0" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
               <div>
                 <label htmlFor="reg-email" className="block text-sm font-medium text-foreground mb-2">
                   Email
@@ -365,70 +366,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             </form>
           )}
 
-          {mode === "register" && registerStep === "plan" && !registerSuccess && (
-            <form onSubmit={handlePlanSubmit} className="flex flex-col gap-5">
-              <div>
-                <p className="text-sm font-medium text-foreground mb-3">Elegi tu plan</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {PLANS.map((plan) => (
-                    <button
-                      key={plan.id}
-                      type="button"
-                      onClick={() => setSelectedPlan(plan.id)}
-                      className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 text-left transition-all ${
-                        selectedPlan === plan.id
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-secondary hover:border-primary/50"
-                      }`}
-                    >
-                      <span className="text-sm font-semibold text-foreground">{plan.label}</span>
-                      <span className="text-center text-xs leading-tight text-muted-foreground">{plan.description}</span>
-                    </button>
-                  ))}
-                </div>
-                <ul className="mt-3 flex flex-col gap-1">
-                  {PLANS.find((plan) => plan.id === selectedPlan)?.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Check size={12} className="shrink-0 text-primary" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {error && (
-                <p className="text-primary text-sm text-center">{error}</p>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={20} className="animate-spin" />
-                    Creando cuenta...
-                  </>
-                ) : (
-                  "Confirmar plan"
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  setRegisterStep("data");
-                }}
-                disabled={loading}
-                className="w-full rounded-lg bg-secondary px-4 py-3 font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50"
-              >
-                Volver
-              </button>
-            </form>
-          )}
-
+          {/* ---- REGISTER SUCCESS ---- */}
           {mode === "register" && registerSuccess && (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center">
@@ -451,63 +389,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               </button>
             </div>
           )}
-
         </div>
-      </div>
-
-      <div className="fixed bottom-4 left-4 z-20 w-[min(320px,calc(100vw-2rem))]">
-        {!adminOpen ? (
-          <button
-            type="button"
-            onClick={() => {
-              setAdminOpen(true);
-              setAdminError(null);
-            }}
-            className="rounded-lg border border-border bg-card/90 px-4 py-2 text-sm font-semibold text-muted-foreground shadow-lg backdrop-blur transition-colors hover:text-foreground"
-          >
-            Acceso admin
-          </button>
-        ) : (
-          <form
-            onSubmit={handleAdminLogin}
-            className="rounded-lg border border-border bg-card/95 p-4 shadow-2xl backdrop-blur"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-foreground">Inicio admin</h2>
-              <button
-                type="button"
-                onClick={() => setAdminOpen(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Cerrar
-              </button>
-            </div>
-
-            <label htmlFor="admin-password" className="mb-1 block text-xs text-muted-foreground">
-              Contrasena
-            </label>
-            <input
-              id="admin-password"
-              type="password"
-              value={adminPassword}
-              onChange={(e) => setAdminPassword(e.target.value)}
-              className="mb-3 w-full rounded-md border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary"
-              placeholder="Contrasena"
-              disabled={adminLoading}
-              required
-            />
-
-            {adminError && <p className="mb-3 text-xs text-primary">{adminError}</p>}
-
-            <button
-              type="submit"
-              disabled={adminLoading}
-              className="w-full rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-            >
-              {adminLoading ? "Entrando..." : "Entrar como admin"}
-            </button>
-          </form>
-        )}
       </div>
     </div>
   );

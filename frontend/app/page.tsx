@@ -3,135 +3,99 @@
 import { useState, useEffect, useCallback } from "react";
 import { LoginScreen } from "@/components/LoginScreen";
 import { ProfileSelector } from "@/components/ProfileSelector";
-import { ProfileCreateScreen } from "@/components/ProfileCreateScreen";
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { ContentRow } from "@/components/ContentRow";
 import { ContentDetail } from "@/components/ContentDetail";
 import { VideoPlayer } from "@/components/VideoPlayer";
-import { AdminDashboard } from "@/components/AdminDashboard";
-import { apiRequest, getSelectedProfile, getStoredAccount, isAuthenticated, logout, setStoredAccount } from "@/lib/api";
-import type { AuthAccount, Contenido, MiListaItem, ContinuarViendoItem, Profile } from "@/lib/types";
+import { CatalogPage } from "@/components/CatalogPage";
+import { ContinueWatchingRow } from "@/components/ContinueWatchingRow";
+import { RecommendationRow } from "@/components/RecommendationRow";
+import { TopContentRow } from "@/components/TopContentRow";
+import {
+  isAuthenticated,
+  getSelectedProfile,
+  searchContenidos,
+  getMiLista,
+  getContinuarViendo,
+  getContenido,
+  upsertVista,
+} from "@/lib/api";
+import type { Contenido, Perfil, Vista } from "@/lib/types";
 
-type AppView = "login" | "profile-select" | "profile-create" | "home" | "player" | "admin";
-type Section = "inicio" | "peliculas" | "series" | "mi-lista";
-
-// Mock data as fallback
-const mockContenidos: Contenido[] = [
-  {
-    id: 1,
-    titulo: "Pelicula de Ejemplo",
-    descripcion: "Una emocionante pelicula llena de aventuras y momentos inolvidables.",
-    tipo: "pelicula",
-    anio: 2024,
-    clasificacion: "PG-13",
-    generos: [{ id: 1, nombre: "Accion" }, { id: 2, nombre: "Aventura" }],
-  },
-  {
-    id: 2,
-    titulo: "Serie Dramatica",
-    descripcion: "Una serie que te mantendra al borde de tu asiento con cada episodio.",
-    tipo: "serie",
-    anio: 2023,
-    clasificacion: "TV-MA",
-    generos: [{ id: 3, nombre: "Drama" }, { id: 4, nombre: "Suspenso" }],
-  },
-];
+type AppView = "login" | "profile-select" | "home" | "player";
+type Section = "inicio" | "catalogo" | "peliculas" | "series" | "mi-lista";
 
 export default function Home() {
   const [view, setView] = useState<AppView>("login");
   const [activeSection, setActiveSection] = useState<Section>("inicio");
   const [selectedContent, setSelectedContent] = useState<Contenido | null>(null);
-  const [playerData, setPlayerData] = useState<{ url: string; title: string } | null>(null);
-  const [account, setAccount] = useState<AuthAccount | null>(null);
+  const [selectedVista, setSelectedVista] = useState<Vista | null>(null);
+  const [playerData, setPlayerData] = useState<{
+    url: string;
+    title: string;
+    contenido_id?: number;
+    episodio_id?: number;
+  } | null>(null);
+  const [playerStartTime, setPlayerStartTime] = useState<number>(0);
 
   // Content state
   const [allContent, setAllContent] = useState<Contenido[]>([]);
-  const [topContent, setTopContent] = useState<Contenido[]>([]);
   const [miLista, setMiLista] = useState<Contenido[]>([]);
-  const [continuarViendo, setContinuarViendo] = useState<Contenido[]>([]);
+  const [continuarViendo, setContinuarViendo] = useState<Vista[]>([]);
+  const [recommendations, setRecommendations] = useState<Contenido[]>([]);
+  const [contenidoMap, setContenidoMap] = useState<Map<number, Contenido>>(new Map());
   const [loading, setLoading] = useState(true);
 
   // Check auth status on mount
   useEffect(() => {
-    if (!isAuthenticated()) {
-      setView("login");
-      return;
-    }
-
-    const account = getStoredAccount();
-    if (account?.is_admin) {
-      setView("admin");
-      return;
-    }
-
-    apiRequest<AuthAccount>("/auth/me")
-      .then((currentAccount) => {
-        setAccount(currentAccount);
-        setStoredAccount({
-          id: currentAccount.id,
-          email: currentAccount.email,
-          is_admin: currentAccount.is_admin,
-        });
-        if (currentAccount.is_admin) {
-          setView("admin");
-          return;
-        }
-        routeAfterAccountLoad(currentAccount);
-      })
-      .catch(() => {
-        logout();
-        setView("login");
-      });
-  }, []);
-
-  const routeAfterAccountLoad = async (currentAccount: AuthAccount) => {
-    try {
-      const profiles = await apiRequest<Profile[]>(`/cuentas/${currentAccount.id}/perfiles`);
-      if (!profiles || profiles.length === 0) {
-        setView("profile-create");
-        return;
+    if (isAuthenticated()) {
+      const profile = getSelectedProfile();
+      if (profile) {
+        setView("home");
+      } else {
+        setView("profile-select");
       }
-
-      const selectedProfile = getSelectedProfile();
-      const selectedStillExists = selectedProfile && profiles.some((profile) => profile.id === selectedProfile.id);
-      setView(selectedStillExists ? "home" : "profile-select");
-    } catch {
-      setView("profile-select");
+    } else {
+      setView("login");
     }
-  };
+  }, []);
 
   // Fetch content
   const fetchContent = useCallback(async () => {
     setLoading(true);
+    const profile = getSelectedProfile();
     try {
-      // Fetch all content
-      const contenidos = await apiRequest<Contenido[]>("/contenidos").catch(() => []);
-      setAllContent(contenidos.length > 0 ? contenidos : mockContenidos);
+      // Fetch all content with profile filtering (infantil restriction)
+      const contenidos = await searchContenidos({
+        perfil_id: profile?.id,
+      }).catch(() => []);
+      setAllContent(contenidos);
 
-      // Fetch top content
-      const top = await apiRequest<Contenido[]>("/contenidos/top").catch(() => []);
-      setTopContent(top);
+      // Build contenido map for quick lookup
+      const map = new Map<number, Contenido>();
+      for (const c of contenidos) {
+        map.set(c.id, c);
+      }
+      setContenidoMap(map);
 
-      // Fetch Mi Lista
-      const profile = getSelectedProfile();
       if (profile && profile.id > 0) {
-        const lista = await apiRequest<MiListaItem[]>(`/perfiles/${profile.id}/mi-lista`).catch(() => []);
-        const listaContenidos = lista
-          .filter((item) => item.contenido)
-          .map((item) => item.contenido as Contenido);
-        setMiLista(listaContenidos);
+        // Fetch Mi Lista
+        const lista = await getMiLista(profile.id).catch(() => []);
+        setMiLista(lista);
 
         // Fetch Continuar Viendo
-        const continuar = await apiRequest<ContinuarViendoItem[]>(`/perfiles/${profile.id}/continuar`).catch(() => []);
-        const continuarContenidos = continuar
-          .filter((item) => item.contenido)
-          .map((item) => item.contenido as Contenido);
-        setContinuarViendo(continuarContenidos);
+        const continuar = await getContinuarViendo(profile.id).catch(() => []);
+        setContinuarViendo(continuar.filter((v) => !v.terminado));
+
+        // Recommendations: use search with profile_id (backend applies infantil filter)
+        // For now we use the general catalog minus already-watched items
+        const watchedIds = new Set(continuar.filter((v) => v.terminado).map((v) => v.contenido_id));
+        const recs = contenidos.filter((c) => !watchedIds.has(c.id)).slice(0, 10);
+        setRecommendations(recs);
       }
-    } catch (error) {
-      console.error("Error fetching content:", error);
-      setAllContent(mockContenidos);
+    } catch {
+      setAllContent([]);
     } finally {
       setLoading(false);
     }
@@ -149,41 +113,12 @@ export default function Home() {
   const series = allContent.filter((c) => c.tipo === "serie");
 
   // Handlers
-  const handleLoginSuccess = (options?: { admin?: boolean }) => {
-    if (options?.admin) {
-      setView("admin");
-      return;
-    }
-
-    apiRequest<AuthAccount>("/auth/me")
-      .then((currentAccount) => {
-        setAccount(currentAccount);
-        setStoredAccount({
-          id: currentAccount.id,
-          email: currentAccount.email,
-          is_admin: currentAccount.is_admin,
-        });
-        return routeAfterAccountLoad(currentAccount);
-      })
-      .catch(() => setView("profile-select"));
+  const handleLoginSuccess = () => {
+    setView("profile-select");
   };
 
-  const handleProfileSelect = () => {
+  const handleProfileSelect = (_profile: Perfil) => {
     setView("home");
-  };
-
-  const handleNoProfiles = () => {
-    setView("profile-create");
-  };
-
-  const handleCreateProfile = () => {
-    setView("profile-create");
-  };
-
-  const handleProfileChanged = () => {
-    setSelectedContent(null);
-    setPlayerData(null);
-    fetchContent();
   };
 
   const handleLogout = () => {
@@ -191,7 +126,8 @@ export default function Home() {
     setActiveSection("inicio");
     setSelectedContent(null);
     setPlayerData(null);
-    setAccount(null);
+    setContinuarViendo([]);
+    setMiLista([]);
   };
 
   const handleNavigate = (section: string) => {
@@ -200,21 +136,68 @@ export default function Home() {
 
   const handleContentClick = (content: Contenido) => {
     setSelectedContent(content);
+    setSelectedVista(null);
+  };
+
+  const handleContinueClick = async (contenidoId: number, vista: Vista) => {
+    // Find or fetch the content
+    let content = contenidoMap.get(contenidoId);
+    if (!content) {
+      try {
+        content = await getContenido(contenidoId);
+      } catch {
+        return;
+      }
+    }
+    setSelectedContent(content);
+    setSelectedVista(vista);
   };
 
   const handleCloseDetail = () => {
     setSelectedContent(null);
+    setSelectedVista(null);
   };
 
-  const handlePlay = (streamUrl: string, title: string) => {
+  const handlePlay = (
+    streamUrl: string,
+    title: string,
+    vistaInfo?: { contenido_id?: number; episodio_id?: number }
+  ) => {
     setSelectedContent(null);
-    setPlayerData({ url: streamUrl, title });
+    setSelectedVista(null);
+    setPlayerData({
+      url: streamUrl,
+      title,
+      contenido_id: vistaInfo?.contenido_id,
+      episodio_id: vistaInfo?.episodio_id,
+    });
+    setPlayerStartTime(Date.now());
     setView("player");
   };
 
-  const handleBackFromPlayer = () => {
+  const handleBackFromPlayer = async () => {
+    // Save progress when leaving player
+    const profile = getSelectedProfile();
+    if (profile && playerData && playerStartTime) {
+      const secondsWatched = Math.floor((Date.now() - playerStartTime) / 1000);
+      if (secondsWatched > 5) {
+        try {
+          await upsertVista(profile.id, {
+            contenido_id: playerData.contenido_id ?? null,
+            episodio_id: playerData.episodio_id ?? null,
+            segundos_vistos: secondsWatched,
+            terminado: false,
+          });
+        } catch {
+          // silently fail
+        }
+      }
+    }
     setPlayerData(null);
+    setPlayerStartTime(0);
     setView("home");
+    // Refresh content to update continuar viendo
+    fetchContent();
   };
 
   // Render based on view
@@ -223,30 +206,7 @@ export default function Home() {
   }
 
   if (view === "profile-select") {
-    if (!account) {
-      return null;
-    }
-    return (
-      <ProfileSelector
-        accountId={account.id}
-        accountPlan={account.plan}
-        onProfileSelect={handleProfileSelect}
-        onNoProfiles={handleNoProfiles}
-        onCreateProfile={handleCreateProfile}
-      />
-    );
-  }
-
-  if (view === "profile-create") {
-    if (!account) {
-      return null;
-    }
-    return (
-      <ProfileCreateScreen
-        accountId={account.id}
-        onProfileCreated={handleProfileSelect}
-      />
-    );
+    return <ProfileSelector onProfileSelect={handleProfileSelect} />;
   }
 
   if (view === "player" && playerData) {
@@ -259,42 +219,36 @@ export default function Home() {
     );
   }
 
-  if (view === "admin") {
-    return <AdminDashboard onLogout={handleLogout} />;
-  }
-
-  if (!account) {
-    return null;
-  }
-
   // Home view
   return (
     <div className="min-h-screen bg-background">
       <Header
         activeSection={activeSection}
-        account={account}
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        onProfileChanged={handleProfileChanged}
       />
 
       <main>
+        {/* ─── HOME / INICIO ─── */}
         {activeSection === "inicio" && (
           <>
             <Hero
-              onExplore={() => handleNavigate("peliculas")}
+              onExplore={() => handleNavigate("catalogo")}
               onMiLista={() => handleNavigate("mi-lista")}
             />
 
             <div className="-mt-20 relative z-10">
-              {/* Contenido Principal (Top content or all content) */}
-              <ContentRow
-                title="Contenido principal"
-                contents={topContent.length > 0 ? topContent : allContent}
-                loading={loading}
-                onContentClick={handleContentClick}
-                emptyMessage="No hay peliculas o series disponibles en este momento. Intentar mas tarde."
-              />
+              {/* Continuar viendo */}
+              {continuarViendo.length > 0 && (
+                <ContinueWatchingRow
+                  vistas={continuarViendo}
+                  contenidoMap={contenidoMap}
+                  onContentClick={handleContinueClick}
+                />
+              )}
+
+              {/* Top 10 */}
+              <TopContentRow onContentClick={handleContentClick} />
 
               {/* Peliculas */}
               <ContentRow
@@ -302,7 +256,7 @@ export default function Home() {
                 contents={peliculas}
                 loading={loading}
                 onContentClick={handleContentClick}
-                emptyMessage="No hay peliculas disponibles en este momento. Intentar mas tarde."
+                emptyMessage="No hay peliculas disponibles en este momento."
               />
 
               {/* Series */}
@@ -311,7 +265,7 @@ export default function Home() {
                 contents={series}
                 loading={loading}
                 onContentClick={handleContentClick}
-                emptyMessage="No hay series disponibles en este momento. Intentar mas tarde."
+                emptyMessage="No hay series disponibles en este momento."
               />
 
               {/* Mi Lista */}
@@ -324,61 +278,73 @@ export default function Home() {
                 />
               )}
 
-              {/* Continuar viendo */}
-              {continuarViendo.length > 0 && (
-                <ContentRow
-                  title="Continuar viendo"
-                  contents={continuarViendo}
-                  loading={false}
-                  onContentClick={handleContentClick}
-                />
-              )}
+              {/* Recomendaciones */}
+              <RecommendationRow
+                recommendations={recommendations}
+                loading={loading}
+                onContentClick={handleContentClick}
+              />
             </div>
           </>
         )}
 
+        {/* ─── CATALOGO (full search & filters) ─── */}
+        {activeSection === "catalogo" && (
+          <CatalogPage onContentClick={handleContentClick} />
+        )}
+
+        {/* ─── PELICULAS ─── */}
         {activeSection === "peliculas" && (
-          <div className="pt-24 pb-12">
-            <h1 className="text-3xl font-bold text-foreground px-4 md:px-8 lg:px-16 mb-6">
-              Peliculas
-            </h1>
-            <ContentRow
-              title=""
-              contents={peliculas}
-              loading={loading}
-              onContentClick={handleContentClick}
-              emptyMessage="No hay peliculas disponibles en este momento. Intentar mas tarde."
-            />
-          </div>
+          <CatalogPage
+            onContentClick={handleContentClick}
+            initialTipo="pelicula"
+          />
         )}
 
+        {/* ─── SERIES ─── */}
         {activeSection === "series" && (
-          <div className="pt-24 pb-12">
-            <h1 className="text-3xl font-bold text-foreground px-4 md:px-8 lg:px-16 mb-6">
-              Series
-            </h1>
-            <ContentRow
-              title=""
-              contents={series}
-              loading={loading}
-              onContentClick={handleContentClick}
-              emptyMessage="No hay series disponibles en este momento. Intentar mas tarde."
-            />
-          </div>
+          <CatalogPage
+            onContentClick={handleContentClick}
+            initialTipo="serie"
+          />
         )}
 
+        {/* ─── MI LISTA ─── */}
         {activeSection === "mi-lista" && (
-          <div className="pt-24 pb-12">
-            <h1 className="text-3xl font-bold text-foreground px-4 md:px-8 lg:px-16 mb-6">
+          <div className="pt-24 pb-12 px-4 md:px-8 lg:px-16">
+            <h1 className="text-3xl font-bold text-foreground mb-6">
               Mi lista
             </h1>
-            <ContentRow
-              title=""
-              contents={miLista}
-              loading={loading}
-              onContentClick={handleContentClick}
-              emptyMessage="Tu lista esta vacia. Agrega peliculas y series para verlas mas tarde."
-            />
+            {miLista.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <p className="text-muted-foreground text-lg">
+                  Tu lista esta vacia. Agrega peliculas y series para verlas
+                  mas tarde.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {miLista.map((content) => (
+                  <button
+                    key={content.id}
+                    onClick={() => handleContentClick(content)}
+                    className="text-left"
+                  >
+                    <div className="aspect-[2/3] rounded-lg bg-secondary flex items-center justify-center border border-border hover:border-muted-foreground transition-all">
+                      <span className="text-muted-foreground text-4xl font-bold">
+                        {content.titulo.charAt(0)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-foreground truncate">
+                      {content.titulo}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {content.anio} - {content.tipo}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -389,6 +355,7 @@ export default function Home() {
           content={selectedContent}
           onClose={handleCloseDetail}
           onPlay={handlePlay}
+          vista={selectedVista}
         />
       )}
     </div>

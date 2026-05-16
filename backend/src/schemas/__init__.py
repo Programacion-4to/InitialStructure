@@ -23,7 +23,6 @@ from .user_schema import (                                       # Esquemas de g
 
 __all__ = [                                                      # Define la interfaz pública del paquete
     "LoginSchema",                                               # Exporta esquema login
-    "AuthAccountSchema",
     "PinSchema",                                                 # Exporta esquema de validación PIN
     "PerfilAuthSchema",                                          # Exporta esquema auth de perfil
     "PerfilAuthResponseSchema",                                  # Exporta respuesta auth de perfil
@@ -46,4 +45,3 @@ __all__ = [                                                      # Define la int
     "CalificacionSchema",                                        # Exporta esquema visualización calificación
     "MiListaSchema",                                             # Exporta esquema gestión favoritos
 ]
-from .auth_schema import AuthAccountSchema

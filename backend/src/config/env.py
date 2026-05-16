@@ -25,10 +25,6 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str = "titoflix-media"
     S3_REGION: str = "us-east-1"
     S3_MEDIA_PREFIX: str = "media"
-    S3_ASSETS_PREFIX: str = "assets"
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
-    ADMIN_USERNAME: str = "titoflix-admin"
-    ADMIN_PASSWORD: str = "admin1234"
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

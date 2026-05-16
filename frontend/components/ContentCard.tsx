@@ -1,7 +1,6 @@
 "use client";
 
 import { Play, Film, Tv } from "lucide-react";
-import { getAssetUrl } from "@/lib/api";
 import type { Contenido } from "@/lib/types";
 
 interface ContentCardProps {
@@ -10,7 +9,6 @@ interface ContentCardProps {
 }
 
 export function ContentCard({ content, onClick }: ContentCardProps) {
-  const portadaUrl = getAssetUrl(content.portada_url);
   return (
     <button
       onClick={onClick}
@@ -18,9 +16,9 @@ export function ContentCard({ content, onClick }: ContentCardProps) {
     >
       {/* Thumbnail */}
       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card border border-border group-hover:border-muted-foreground transition-all duration-200">
-        {portadaUrl ? (
+        {content.portada_url ? (
           <img
-            src={portadaUrl}
+            src={content.portada_url}
             alt={content.titulo}
             className="w-full h-full object-cover"
           />
@@ -47,9 +45,9 @@ export function ContentCard({ content, onClick }: ContentCardProps) {
         </div>
         
         {/* Classification badge */}
-        {content.clasificacion && (
+        {content.clasificacion_edad && (
           <div className="absolute top-2 right-2 px-2 py-0.5 bg-primary/80 text-primary-foreground text-xs font-medium rounded">
-            {content.clasificacion}
+            {content.clasificacion_edad}
           </div>
         )}
       </div>

@@ -1,17 +1,50 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Play, Plus, Check, Star, Loader2, Film, Tv } from "lucide-react";
-import { apiRequest, getSelectedProfile, getBackendUrl, getAssetUrl } from "@/lib/api";
-import type { Contenido, Temporada, Episodio, PlaybackResponse, MiListaItem, VideoVariant } from "@/lib/types";
+import {
+  X,
+  Play,
+  Plus,
+  Check,
+  Loader2,
+  Film,
+  Tv,
+  Clock,
+  Calendar,
+  ShieldAlert,
+} from "lucide-react";
+import { RatingStars } from "./RatingStars";
+import { ProgressBar } from "./ProgressBar";
+import {
+  getSelectedProfile,
+  getBackendUrl,
+  getTemporadas,
+  getEpisodios,
+  getPlayback,
+  getEpisodioPlayback,
+  getMiLista,
+  addToMiLista,
+  removeFromMiLista,
+  upsertCalificacion,
+  upsertVista,
+  type ApiError,
+} from "@/lib/api";
+import type {
+  Contenido,
+  Temporada,
+  Episodio,
+  Vista,
+} from "@/lib/types";
 
 interface ContentDetailProps {
   content: Contenido;
   onClose: () => void;
-  onPlay: (streamUrl: string, title: string) => void;
+  onPlay: (streamUrl: string, title: string, vista?: { contenido_id?: number; episodio_id?: number }) => void;
+  /** Current vista for this content (from continuar viendo) */
+  vista?: Vista | null;
 }
 
-export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) {
+export function ContentDetail({ content, onClose, onPlay, vista }: ContentDetailProps) {
   const [temporadas, setTemporadas] = useState<Temporada[]>([]);
   const [episodios, setEpisodios] = useState<Episodio[]>([]);
   const [selectedTemporada, setSelectedTemporada] = useState<Temporada | null>(null);
@@ -19,21 +52,28 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
   const [playLoading, setPlayLoading] = useState<string | null>(null);
   const [inMiLista, setInMiLista] = useState(false);
   const [miListaLoading, setMiListaLoading] = useState(false);
-  const [selectedMovieQuality, setSelectedMovieQuality] = useState("");
-  const [selectedEpisodeQualities, setSelectedEpisodeQualities] = useState<Record<number, string>>({});
+  const [userRating, setUserRating] = useState(0);
+  const [ratingError, setRatingError] = useState<string | null>(null);
+  const [infantilBlocked, setInfantilBlocked] = useState(false);
 
   const profile = getSelectedProfile();
+  const isInfantil = profile?.es_infantil ?? false;
+
+  // Check infantil restriction
+  useEffect(() => {
+    if (isInfantil && content.clasificacion_edad !== "ATP") {
+      setInfantilBlocked(true);
+    }
+  }, [isInfantil, content.clasificacion_edad]);
 
   // Fetch temporadas for series
   useEffect(() => {
     if (content.tipo === "serie") {
       setLoading(true);
-      apiRequest<Temporada[]>(`/contenidos/${content.id}/temporadas`)
+      getTemporadas(content.id)
         .then((data) => {
           setTemporadas(data);
-          if (data.length > 0) {
-            setSelectedTemporada(data[0]);
-          }
+          if (data.length > 0) setSelectedTemporada(data[0]);
         })
         .catch(() => setTemporadas([]))
         .finally(() => setLoading(false));
@@ -44,8 +84,8 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
   useEffect(() => {
     if (selectedTemporada) {
       setLoading(true);
-      apiRequest<Episodio[]>(`/temporadas/${selectedTemporada.id}/episodios`)
-        .then((data) => setEpisodios(data))
+      getEpisodios(selectedTemporada.id)
+        .then(setEpisodios)
         .catch(() => setEpisodios([]))
         .finally(() => setLoading(false));
     }
@@ -54,48 +94,47 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
   // Check if content is in Mi Lista
   useEffect(() => {
     if (profile) {
-      apiRequest<MiListaItem[]>(`/perfiles/${profile.id}/mi-lista`)
+      getMiLista(profile.id)
         .then((data) => {
-          const found = data.some((item) => item.contenido_id === content.id);
-          setInMiLista(found);
+          setInMiLista(data.some((c) => c.id === content.id));
         })
         .catch(() => {});
     }
   }, [content, profile]);
 
-  const movieQualities = qualityOptions(content.video_variants);
-  const portadaUrl = getAssetUrl(content.portada_url);
-
   const handlePlayMovie = async () => {
+    if (infantilBlocked) return;
     setPlayLoading("movie");
     try {
-      const quality = selectedMovieQuality || movieQualities[0] || "";
-      const path = quality
-        ? `/contenidos/${content.id}/playback?quality=${encodeURIComponent(quality)}`
-        : `/contenidos/${content.id}/playback`;
-      const data = await apiRequest<PlaybackResponse>(path);
+      const data = await getPlayback(content.id);
       const streamUrl = getBackendUrl(data.stream_url);
-      onPlay(streamUrl, content.titulo);
-    } catch (error) {
-      console.error("Error getting playback URL:", error);
+      onPlay(streamUrl, content.titulo, { contenido_id: content.id });
+    } catch (err) {
+      const apiErr = err as ApiError;
+      if (apiErr.status === 403) {
+        setInfantilBlocked(true);
+      }
     } finally {
       setPlayLoading(null);
     }
   };
 
   const handlePlayEpisode = async (episodio: Episodio) => {
+    if (infantilBlocked) return;
     setPlayLoading(`ep-${episodio.id}`);
     try {
-      const qualities = qualityOptions(episodio.video_variants);
-      const quality = selectedEpisodeQualities[episodio.id] || qualities[0] || "";
-      const path = quality
-        ? `/episodios/${episodio.id}/playback?quality=${encodeURIComponent(quality)}`
-        : `/episodios/${episodio.id}/playback`;
-      const data = await apiRequest<PlaybackResponse>(path);
+      const data = await getEpisodioPlayback(episodio.id);
       const streamUrl = getBackendUrl(data.stream_url);
-      onPlay(streamUrl, `${content.titulo} - T${selectedTemporada?.numero} E${episodio.numero}: ${episodio.titulo}`);
-    } catch (error) {
-      console.error("Error getting playback URL:", error);
+      onPlay(
+        streamUrl,
+        `${content.titulo} - T${selectedTemporada?.numero} E${episodio.numero}: ${episodio.titulo}`,
+        { episodio_id: episodio.id }
+      );
+    } catch (err) {
+      const apiErr = err as ApiError;
+      if (apiErr.status === 403) {
+        setInfantilBlocked(true);
+      }
     } finally {
       setPlayLoading(null);
     }
@@ -103,29 +142,45 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
 
   const handleToggleMiLista = async () => {
     if (!profile) return;
-    
     setMiListaLoading(true);
     try {
       if (inMiLista) {
-        await apiRequest(`/perfiles/${profile.id}/mi-lista/${content.id}`, { method: "DELETE" });
+        await removeFromMiLista(profile.id, content.id);
         setInMiLista(false);
       } else {
-        await apiRequest(`/perfiles/${profile.id}/mi-lista`, {
-          method: "POST",
-          body: JSON.stringify({ contenido_id: content.id }),
-        });
+        await addToMiLista(profile.id, content.id);
         setInMiLista(true);
       }
-    } catch (error) {
-      console.error("Error toggling Mi Lista:", error);
+    } catch {
+      // silently fail
     } finally {
       setMiListaLoading(false);
     }
   };
 
+  const handleRate = async (puntaje: number) => {
+    if (!profile) return;
+    setRatingError(null);
+    try {
+      await upsertCalificacion(profile.id, content.id, puntaje);
+      setUserRating(puntaje);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Error al calificar";
+      if (msg.toLowerCase().includes("empezaste") || msg.toLowerCase().includes("vista")) {
+        setRatingError("Solo podes calificar contenidos que empezaste a ver.");
+      } else {
+        setRatingError(msg);
+      }
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose}>
-      <div 
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+      onClick={onClose}
+    >
+      <div
         className="relative w-full max-w-4xl max-h-[90vh] bg-card rounded-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -140,12 +195,14 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
 
         {/* Header with poster/background */}
         <div className="relative h-64 md:h-80">
-          {portadaUrl ? (
-            <img
-              src={portadaUrl}
-              alt={content.titulo}
-              className="w-full h-full object-cover"
-            />
+          {content.storage_folder_id ? (
+            <div className="w-full h-full flex items-center justify-center bg-secondary">
+              {content.tipo === "pelicula" ? (
+                <Film size={80} className="text-muted-foreground" />
+              ) : (
+                <Tv size={80} className="text-muted-foreground" />
+              )}
+            </div>
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-secondary">
               {content.tipo === "pelicula" ? (
@@ -156,32 +213,45 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/50 to-transparent" />
-          
+
           {/* Title overlay */}
           <div className="absolute bottom-4 left-4 right-4">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground">{content.titulo}</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground text-balance">
+              {content.titulo}
+            </h2>
           </div>
         </div>
 
         {/* Content */}
         <div className="p-4 md:p-6 overflow-y-auto max-h-[calc(90vh-20rem)]">
+          {/* Infantil block */}
+          {infantilBlocked && (
+            <div className="flex items-center gap-3 p-4 bg-primary/10 border border-primary/30 rounded-lg mb-4">
+              <ShieldAlert size={24} className="text-primary shrink-0" />
+              <p className="text-sm text-foreground">
+                Este contenido no esta disponible para perfiles infantiles.
+              </p>
+            </div>
+          )}
+
           {/* Meta info */}
           <div className="flex flex-wrap items-center gap-3 mb-4 text-sm">
             {content.anio && (
-              <span className="text-muted-foreground">{content.anio}</span>
-            )}
-            {content.clasificacion && (
-              <span className="px-2 py-0.5 bg-primary/20 text-primary rounded">
-                {content.clasificacion}
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Calendar size={14} />
+                {content.anio}
               </span>
             )}
+            <span className="px-2 py-0.5 bg-primary/20 text-primary rounded">
+              {content.clasificacion_edad}
+            </span>
             <span className="px-2 py-0.5 bg-secondary text-secondary-foreground rounded">
               {content.tipo === "pelicula" ? "Pelicula" : "Serie"}
             </span>
-            {content.promedio_calificacion !== undefined && content.promedio_calificacion > 0 && (
-              <span className="flex items-center gap-1 text-yellow-500">
-                <Star size={14} fill="currentColor" />
-                {content.promedio_calificacion.toFixed(1)}
+            {content.duracion_min && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Clock size={14} />
+                {content.duracion_min} min
               </span>
             )}
           </div>
@@ -202,42 +272,50 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
 
           {/* Description */}
           {content.descripcion && (
-            <p className="text-muted-foreground mb-6 leading-relaxed">
+            <p className="text-muted-foreground mb-4 leading-relaxed">
               {content.descripcion}
             </p>
           )}
 
+          {/* Progress bar (if user has vista) */}
+          {vista && (
+            <div className="mb-4">
+              <ProgressBar
+                segundosVistos={vista.segundos_vistos}
+                duracionMin={content.duracion_min}
+                terminado={vista.terminado}
+              />
+            </div>
+          )}
+
+          {/* Rating */}
+          <div className="mb-4">
+            <RatingStars
+              value={userRating}
+              average={content.promedio_calificaciones}
+              onRate={handleRate}
+              disabled={infantilBlocked}
+            />
+            {ratingError && (
+              <p className="text-primary text-xs mt-1">{ratingError}</p>
+            )}
+          </div>
+
           {/* Action buttons */}
           <div className="flex gap-3 mb-6">
             {content.tipo === "pelicula" && (
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={handlePlayMovie}
-                  disabled={playLoading === "movie"}
-                  className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  {playLoading === "movie" ? (
-                    <Loader2 size={20} className="animate-spin" />
-                  ) : (
-                    <Play size={20} fill="currentColor" />
-                  )}
-                  Reproducir
-                </button>
-                {movieQualities.length > 0 && (
-                  <select
-                    className="rounded-lg border border-border bg-secondary px-3 py-3 text-sm font-semibold text-secondary-foreground outline-none focus:ring-2 focus:ring-primary"
-                    value={selectedMovieQuality || movieQualities[0]}
-                    onChange={(event) => setSelectedMovieQuality(event.target.value)}
-                    aria-label="Calidad de pelicula"
-                  >
-                    {movieQualities.map((quality) => (
-                      <option key={quality} value={quality}>
-                        {quality}
-                      </option>
-                    ))}
-                  </select>
+              <button
+                onClick={handlePlayMovie}
+                disabled={playLoading === "movie" || infantilBlocked}
+                className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {playLoading === "movie" ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <Play size={20} fill="currentColor" />
                 )}
-              </div>
+                Reproducir
+              </button>
             )}
             <button
               onClick={handleToggleMiLista}
@@ -251,17 +329,18 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
               ) : (
                 <Plus size={20} />
               )}
-              {inMiLista ? "En Mi lista" : "Mi lista"}
+              {inMiLista ? "Quitar de Mi Lista" : "Agregar a Mi Lista"}
             </button>
           </div>
 
           {/* Series: Temporadas and Episodios */}
           {content.tipo === "serie" && (
             <div>
-              {/* Temporadas tabs */}
               {temporadas.length > 0 && (
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-foreground mb-3">Temporadas</h3>
+                  <h3 className="text-lg font-semibold text-foreground mb-3">
+                    Temporadas
+                  </h3>
                   <div className="flex flex-wrap gap-2">
                     {temporadas.map((temporada) => (
                       <button
@@ -280,26 +359,23 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
                 </div>
               )}
 
-              {/* Episodios list */}
               {loading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 size={32} className="animate-spin text-primary" />
+                  <Loader2
+                    size={32}
+                    className="animate-spin text-primary"
+                  />
                 </div>
               ) : episodios.length > 0 ? (
                 <div className="space-y-3">
-                  <h3 className="text-lg font-semibold text-foreground mb-3">Episodios</h3>
+                  <h3 className="text-lg font-semibold text-foreground mb-3">
+                    Episodios
+                  </h3>
                   {episodios.map((episodio) => (
                     <div
                       key={episodio.id}
-                      className="flex items-center justify-between gap-3 p-4 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                      className="flex items-center justify-between p-4 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
                     >
-                      {getAssetUrl(episodio.thumbnail_url) ? (
-                        <img
-                          src={getAssetUrl(episodio.thumbnail_url) || ""}
-                          alt=""
-                          className="h-16 w-28 flex-shrink-0 rounded-md object-cover"
-                        />
-                      ) : null}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-muted-foreground">
@@ -308,44 +384,30 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
                           <h4 className="font-medium text-foreground truncate">
                             {episodio.titulo}
                           </h4>
+                          <span className="text-xs text-muted-foreground">
+                            {episodio.duracion_min} min
+                          </span>
                         </div>
-                        {episodio.descripcion && (
-                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                            {episodio.descripcion}
-                          </p>
-                        )}
                       </div>
-                      {qualityOptions(episodio.video_variants).length > 0 && (
-                        <select
-                          className="rounded-md border border-border bg-background px-2 py-2 text-xs font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary"
-                          value={
-                            selectedEpisodeQualities[episodio.id] ||
-                            qualityOptions(episodio.video_variants)[0]
-                          }
-                          onChange={(event) =>
-                            setSelectedEpisodeQualities((current) => ({
-                              ...current,
-                              [episodio.id]: event.target.value,
-                            }))
-                          }
-                          aria-label={`Calidad de ${episodio.titulo}`}
-                        >
-                          {qualityOptions(episodio.video_variants).map((quality) => (
-                            <option key={quality} value={quality}>
-                              {quality}
-                            </option>
-                          ))}
-                        </select>
-                      )}
                       <button
                         onClick={() => handlePlayEpisode(episodio)}
-                        disabled={playLoading === `ep-${episodio.id}`}
-                        className="ml-4 w-10 h-10 flex-shrink-0 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
+                        disabled={
+                          playLoading === `ep-${episodio.id}` ||
+                          infantilBlocked
+                        }
+                        className="ml-4 w-10 h-10 flex-shrink-0 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {playLoading === `ep-${episodio.id}` ? (
-                          <Loader2 size={20} className="animate-spin text-primary-foreground" />
+                          <Loader2
+                            size={20}
+                            className="animate-spin text-primary-foreground"
+                          />
                         ) : (
-                          <Play size={20} fill="white" className="text-primary-foreground ml-0.5" />
+                          <Play
+                            size={20}
+                            fill="white"
+                            className="text-primary-foreground ml-0.5"
+                          />
                         )}
                       </button>
                     </div>
@@ -366,14 +428,4 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
       </div>
     </div>
   );
-}
-
-function qualityOptions(variants: VideoVariant[] | undefined): string[] {
-  return [...(variants || [])]
-    .sort((a, b) => qualityRank(b.quality) - qualityRank(a.quality))
-    .map((variant) => variant.quality);
-}
-
-function qualityRank(quality: string): number {
-  return { FHD: 1, QHD: 2, "4K": 3 }[quality] || 0;
 }

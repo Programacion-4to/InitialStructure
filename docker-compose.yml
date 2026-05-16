@@ -59,9 +59,6 @@ services:
       S3_BUCKET_NAME: titoflix-media
       S3_REGION: us-east-1
       S3_MEDIA_PREFIX: media
-      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-      ADMIN_USERNAME: titoflix-admin
-      ADMIN_PASSWORD: admin1234
     ports:
       - "8000:8000"
     depends_on:
@@ -73,14 +70,9 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        INTERNAL_BACKEND_URL: http://localhost:8000
     container_name: titoflix-frontend
     environment:
-      INTERNAL_BACKEND_URL: http://localhost:8000
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
-      NEXT_PUBLIC_DIRECT_API_URL: http://localhost:8000/api/v1
-      NEXT_PUBLIC_BACKEND_URL: ""
     ports:
       - "3000:3000"
     depends_on:

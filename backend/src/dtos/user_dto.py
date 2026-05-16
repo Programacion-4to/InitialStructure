@@ -45,6 +45,5 @@ class PerfilResponseDTO(BaseModel):
     nombre: str                                  # Nombre del perfil
     es_infantil: bool                            # Indica si es un perfil infantil
     avatar: str | None = None                    # URL o referencia del avatar
-    has_pin: bool = False
 
     model_config = {"from_attributes": True}     # Configuración para lectura desde ORM

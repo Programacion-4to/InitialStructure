@@ -64,36 +64,3 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
 }
-
-.admin-input {
-  width: 100%;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--secondary);
-  color: var(--foreground);
-  padding: 10px 12px;
-  font-size: 14px;
-  outline: none;
-}
-
-.admin-input:focus {
-  box-shadow: 0 0 0 2px var(--ring);
-}
-
-.admin-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 6px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  transition: opacity 0.2s;
-}
-
-.admin-button:hover {
-  opacity: 0.85;
-}
