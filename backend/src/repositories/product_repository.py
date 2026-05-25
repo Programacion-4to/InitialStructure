@@ -1,7 +1,7 @@
 from sqlalchemy import func
 from sqlalchemy.orm import Session, aliased
 
-from src.db import Calificacion, Contenido, Episodio, Genero, Temporada, VideoVariant, Vista
+from src.db import Calificacion, Contenido, Descarga, Episodio, Genero, Perfil, Temporada, VideoVariant, Vista
 
 
 class GeneroRepository:
@@ -495,6 +495,7 @@ class VistaRepository:
 
         vista.segundos_vistos = segundos_vistos
         vista.terminado = terminado
+        vista.fecha = func.now()
 
         self.db.commit()
         self.db.refresh(vista)
@@ -537,6 +538,61 @@ class VistaRepository:
             .order_by(Vista.fecha.desc())
             .all()
         )
+
+
+class DescargaRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create(
+        self,
+        perfil_id: int,
+        vence_en,
+        episodio_id: int | None = None,
+        contenido_id: int | None = None,
+    ) -> Descarga:
+        descarga = Descarga(
+            perfil_id=perfil_id,
+            episodio_id=episodio_id,
+            contenido_id=contenido_id,
+            vence_en=vence_en,
+        )
+        self.db.add(descarga)
+        self.db.commit()
+        self.db.refresh(descarga)
+        return descarga
+
+    def find_by_id(self, descarga_id: int) -> Descarga | None:
+        return self.db.query(Descarga).filter(Descarga.id == descarga_id).first()
+
+    def list_by_perfil(self, perfil_id: int) -> list[Descarga]:
+        return (
+            self.db.query(Descarga)
+            .filter(Descarga.perfil_id == perfil_id)
+            .order_by(Descarga.fecha_descarga.desc())
+            .all()
+        )
+
+    def active_count_by_cuenta(self, cuenta_id: int, now) -> int:
+        return (
+            self.db.query(Descarga)
+            .join(Descarga.perfil)
+            .filter(
+                Descarga.eliminada.is_(False),
+                Descarga.vence_en > now,
+                Perfil.cuenta_id == cuenta_id,
+            )
+            .count()
+        )
+
+    def mark_deleted(self, descarga_id: int) -> Descarga | None:
+        descarga = self.find_by_id(descarga_id)
+        if not descarga:
+            return None
+        descarga.eliminada = True
+        self.db.commit()
+        self.db.refresh(descarga)
+        return descarga
 
 
 class CalificacionRepository:

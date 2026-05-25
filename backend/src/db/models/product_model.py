@@ -210,3 +210,27 @@ class Calificacion(Base):
     __table_args__ = (
         UniqueConstraint("perfil_id", "contenido_id", name="uq_calificacion_perfil_contenido"),
     )
+
+
+class Descarga(Base):
+    __tablename__ = "descargas"
+
+    id = Column(Integer, primary_key=True)
+    perfil_id = Column(Integer, ForeignKey("perfiles.id"), nullable=False)
+    episodio_id = Column(Integer, ForeignKey("episodios.id"), nullable=True)
+    contenido_id = Column(Integer, ForeignKey("contenidos.id"), nullable=True)
+    fecha_descarga = Column(DateTime, server_default=func.now())
+    vence_en = Column(DateTime, nullable=False)
+    eliminada = Column(Boolean, default=False, nullable=False)
+
+    perfil = relationship("Perfil")
+    episodio = relationship("Episodio")
+    contenido = relationship("Contenido")
+
+    __table_args__ = (
+        CheckConstraint(
+            "(episodio_id IS NOT NULL AND contenido_id IS NULL) OR "
+            "(episodio_id IS NULL AND contenido_id IS NOT NULL)",
+            name="ck_descarga_un_solo_recurso",
+        ),
+    )

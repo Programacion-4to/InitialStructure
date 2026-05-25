@@ -1,7 +1,8 @@
-from src.db import Calificacion, Contenido, Episodio, Genero, Temporada, Vista  # Importa modelos ORM
+from src.db import Calificacion, Contenido, Descarga, Episodio, Genero, Temporada, Vista  # Importa modelos ORM
 from src.dtos import (                                                  # Importa esquemas de respuesta
     CalificacionResponseDTO,
     ContenidoResponseDTO,
+    DescargaResponseDTO,
     EpisodioResponseDTO,
     GeneroResponseDTO,
     ProductResponseDTO,
@@ -40,6 +41,10 @@ def to_episodio_response(episodio: Episodio) -> EpisodioResponseDTO:    # Convie
 def to_vista_response(vista: Vista) -> VistaResponseDTO:                # Convierte Vista a DTO
     return VistaResponseDTO.model_validate(vista)                       # Valida y transforma al esquema
 
+
+def to_descarga_response(descarga: Descarga) -> DescargaResponseDTO:
+    return DescargaResponseDTO.model_validate(descarga)
+
 def to_calificacion_response(calificacion: Calificacion) -> CalificacionResponseDTO:  # Convierte Calificación a DTO
     return CalificacionResponseDTO.model_validate(calificacion)                        # Valida y transforma al esquema
 
@@ -65,6 +70,10 @@ def to_episodio_response_list(episodios: list[Episodio]) -> list[EpisodioRespons
 
 def to_vista_response_list(vistas: list[Vista]) -> list[VistaResponseDTO]:  # Convierte lista de Vistas a DTOs
     return [to_vista_response(vista) for vista in vistas]                   # Itera y aplica el mapper individual
+
+
+def to_descarga_response_list(descargas: list[Descarga]) -> list[DescargaResponseDTO]:
+    return [to_descarga_response(descarga) for descarga in descargas]
 
 
 def to_calificacion_response_list(                                          # Convierte lista de Calificaciones a DTOs

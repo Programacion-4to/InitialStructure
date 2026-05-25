@@ -300,7 +300,7 @@ export async function getTopContenidos(genero?: string): Promise<import("@/lib/t
 // ─── HU11: Control parental PIN ──────────────────────────────────────────────
 
 export async function desbloquearPerfil(perfilId: number, pin: string): Promise<{ success: boolean }> {
-  await apiRequest(`/auth/perfiles/${perfilId}`, {
+  await apiRequest(`/perfiles/${perfilId}/desbloquear`, {
     method: "POST",
     body: JSON.stringify({ pin }),
   });

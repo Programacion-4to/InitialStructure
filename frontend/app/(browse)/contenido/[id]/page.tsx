@@ -162,9 +162,10 @@ export default function ContentDetailPage() {
     setPlayLoading("movie");
     try {
       const quality = selectedMovieQuality || movieQualities[0] || "";
-      const path = quality
-        ? `/contenidos/${content.id}/playback?quality=${encodeURIComponent(quality)}`
-        : `/contenidos/${content.id}/playback`;
+      const params = new URLSearchParams();
+      if (quality) params.set("quality", quality);
+      if (currentProfileData?.id) params.set("perfil_id", String(currentProfileData.id));
+      const path = `/contenidos/${content.id}/playback${params.toString() ? `?${params.toString()}` : ""}`;
       const data = await apiRequest<PlaybackResponse>(path);
       const streamUrl = getBackendUrl(data.stream_url);
       router.push(
@@ -194,9 +195,10 @@ export default function ContentDetailPage() {
     try {
       const qualities = qualityOptions(episodio.video_variants);
       const quality = selectedEpisodeQualities[episodio.id] || qualities[0] || "";
-      const path = quality
-        ? `/episodios/${episodio.id}/playback?quality=${encodeURIComponent(quality)}`
-        : `/episodios/${episodio.id}/playback`;
+      const params = new URLSearchParams();
+      if (quality) params.set("quality", quality);
+      if (currentProfileData?.id) params.set("perfil_id", String(currentProfileData.id));
+      const path = `/episodios/${episodio.id}/playback${params.toString() ? `?${params.toString()}` : ""}`;
       const data = await apiRequest<PlaybackResponse>(path);
       const streamUrl = getBackendUrl(data.stream_url);
       const title = `${content.titulo} - T${selectedTemporada.numero} E${episodio.numero}: ${episodio.titulo}`;

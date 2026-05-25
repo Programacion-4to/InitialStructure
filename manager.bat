@@ -17,9 +17,9 @@ echo 6. Ver consola de MinIO
 echo 7. Detener servicios
 echo 8. Reconstruir e iniciar
 echo 9. Resetear tablas de Postgres y buckets de MinIO
-echo 10. Iniciar tunel publico
-echo 11. Ver URL del tunel publico
-echo 12. Detener tunel publico
+echo 10. Iniciar tunel de Cloudflare
+echo 11. Ver estado/logs del tunel
+echo 12. Detener tunel de Cloudflare
 echo 13. Reconstruir frontend sin cache
 echo 0. Salir
 echo.
@@ -181,15 +181,25 @@ pause
 goto menu
 
 :start_tunnel
+call :ensure_env
+if errorlevel 1 (
+    pause
+    goto menu
+)
 call :check_docker
 if errorlevel 1 (
     pause
     goto menu
 )
+call :load_tunnel_token
+if errorlevel 1 (
+    pause
+    goto menu
+)
 docker rm -f titoflix-cloudflared-tunnel >nul 2>nul
-docker run -d --name titoflix-cloudflared-tunnel cloudflare/cloudflared:latest tunnel --url http://host.docker.internal:3000
+docker run -d --name titoflix-cloudflared-tunnel --restart unless-stopped cloudflare/cloudflared:latest tunnel --no-autoupdate run --token "%CLOUDFLARE_TUNNEL_TOKEN%"
 echo.
-echo Espera unos segundos. La URL aparece abajo como https://...trycloudflare.com
+echo Espera unos segundos. El conector deberia aparecer como Healthy en Cloudflare Zero Trust.
 timeout /t 6 /nobreak >nul
 docker logs titoflix-cloudflared-tunnel
 pause
@@ -218,7 +228,7 @@ goto menu
 :ensure_env
 powershell -NoProfile -ExecutionPolicy Bypass -Command "if (!(Test-Path '.env') -or -not (Select-String -Path '.env' -Pattern '^DATABASE_URL=' -Quiet)) { if (Test-Path '.env.example') { Copy-Item '.env.example' '.env' -Force; Write-Host 'Se creo/actualizo .env desde .env.example porque faltaban variables base.' } else { Write-Error 'No se encontro .env.example para crear .env.'; exit 1 } }"
 if errorlevel 1 exit /b 1
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$path='.env'; $values=@{NEXT_PUBLIC_API_URL='/api/v1'; NEXT_PUBLIC_DIRECT_API_URL='/api/v1'; NEXT_PUBLIC_BACKEND_URL=''}; $lines=@(); if (Test-Path $path) { $lines=Get-Content $path }; foreach ($key in $values.Keys) { $line=$key + '=' + $values[$key]; if ($lines -match ('^' + [regex]::Escape($key) + '=')) { $lines=$lines -replace ('^' + [regex]::Escape($key) + '=.*'), $line } else { $lines += $line } }; Set-Content -Path $path -Value $lines"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$path='.env'; $values=@{NEXT_PUBLIC_API_URL='/api/v1'; NEXT_PUBLIC_DIRECT_API_URL='/api/v1'; NEXT_PUBLIC_BACKEND_URL=''}; $lines=@(); if (Test-Path $path) { $lines=Get-Content $path }; foreach ($key in $values.Keys) { $line=$key + '=' + $values[$key]; if ($lines -match ('^' + [regex]::Escape($key) + '=')) { $lines=$lines -replace ('^' + [regex]::Escape($key) + '=.*'), $line } else { $lines += $line } }; if (-not ($lines -match '^CLOUDFLARE_TUNNEL_TOKEN=')) { $lines += ''; $lines += '# Cloudflare Tunnel'; $lines += 'CLOUDFLARE_TUNNEL_TOKEN=' }; Set-Content -Path $path -Value $lines"
 goto :eof
 
 :check_docker
@@ -228,6 +238,21 @@ if errorlevel 1 (
     echo Docker no esta disponible.
     echo Abri Docker Desktop y espera a que diga "Docker Desktop is running".
     echo Si ya esta abierto, revisa que este usando el engine Linux de Docker Desktop.
+    exit /b 1
+)
+goto :eof
+
+:load_tunnel_token
+set "CLOUDFLARE_TUNNEL_TOKEN="
+for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
+    if /i "%%A"=="CLOUDFLARE_TUNNEL_TOKEN" set "CLOUDFLARE_TUNNEL_TOKEN=%%B"
+)
+if "%CLOUDFLARE_TUNNEL_TOKEN%"=="" (
+    echo.
+    echo Falta CLOUDFLARE_TUNNEL_TOKEN en .env.
+    echo Copia el token del conector Docker en Cloudflare Zero Trust ^> Networks ^> Tunnels.
+    echo Debe quedar asi:
+    echo CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoi...
     exit /b 1
 )
 goto :eof

@@ -1,81 +1,99 @@
-# Initial Structure — FastAPI + SQLAlchemy + Pydantic
+# Titoflix Backend
 
-Estructura base de un proyecto en capas (routers, services, repositories, models, schemas, dtos, mappers, middlewares).
+API REST de Titoflix hecha con FastAPI, SQLAlchemy, Pydantic y PostgreSQL.
 
-## Importante: este repo es un TEMPLATE
+## Como correrlo
 
-**No clones este repo directamente ni intentes pushear.** El repo está protegido y solo el docente tiene permisos de escritura.
+### Con Docker, recomendado
 
-### Cómo trabajar con esta plantilla
+Desde la raiz del proyecto:
 
-1. Entrá al repo en GitHub.
-2. Hacé click en el botón verde **"Use this template" → "Create a new repository"** (o, si no aparece, usá **"Fork"**).
-3. Creá el nuevo repo en **tu cuenta personal** de GitHub.
-4. Cloná **tu copia** (no la del docente):
-   ```bash
-   git clone https://github.com/<TU_USUARIO>/<TU_REPO>.git
-   cd <TU_REPO>
-   ```
-5. A partir de ahí trabajás libremente sobre tu propio repo.
+```powershell
+docker compose up -d --build backend
+```
 
-> Si intentás `git push` y te dice `permission denied`, es porque clonaste el repo del docente en lugar de tu fork/template. Volvé al paso 2.
+En la practica conviene levantar todo el stack:
 
----
+```powershell
+docker compose up -d --build
+```
 
-## Setup
+### Sin Docker
 
-```bash
-python -m venv venv
-source venv/bin/activate          # Linux/Mac
-# venv\Scripts\Activate.ps1       # Windows
+Desde `backend/`:
 
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-cp .env.example .env               # editá con tus credenciales
-
-uvicorn src.app:app --reload
+uvicorn src.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Abrir http://localhost:8000/docs para ver Swagger.
+Para este modo hay que tener PostgreSQL y MinIO configurados en `.env`.
 
----
+## URLs
 
-## Estructura de carpetas
+Misma maquina:
 
-```
+- API: `http://localhost:8000`
+- Swagger: `http://localhost:8000/docs`
+- Healthcheck: `http://localhost:8000/health`
+
+Desde otro dispositivo de la red:
+
+- API: `http://[IP_LOCAL]:8000`
+- Swagger: `http://[IP_LOCAL]:8000/docs`
+
+Con tunel publico apuntando al backend:
+
+- API: `[URL_DE_TUNEL]/api/v1`
+- Swagger: `[URL_DE_TUNEL]/docs`
+
+## Servicios internos
+
+Dentro de Docker, el backend no usa `localhost` para hablar con otros contenedores:
+
+- PostgreSQL: `postgres:5432`
+- MinIO API: `minio:9000`
+
+La consola de MinIO (`:9001`) es de administracion. No es necesaria para que el usuario use Titoflix y normalmente se abre solo desde el host o la LAN.
+
+## Estructura
+
+```text
 src/
-├── db/
-│   ├── connection.py
-│   ├── models/          # SQLAlchemy
-│   ├── migrations/      # Alembic
-│   └── seeders/
-├── schemas/             # Pydantic (validación HTTP)
-├── dtos/                # Pydantic (transporte entre capas)
-├── mappers/             # Model ⇄ DTO
-├── repositories/        # queries
-├── services/            # lógica de negocio
-├── routers/             # endpoints FastAPI
-├── middlewares/
-├── config/
-├── utils/
-├── app.py               # crea app FastAPI
-└── main.py              # entry point
+  app.py
+  main.py
+  config/
+  db/
+    connection.py
+    models/
+  schemas/
+  dtos/
+  mappers/
+  repositories/
+  services/
+  routers/
+  middlewares/
+  utils/
 ```
 
----
+## Endpoints principales
 
-## Cómo está pensada la entrega
+- Auth: `/api/v1/auth/login`, `/api/v1/auth/admin-login`, `/api/v1/auth/me`
+- Cuentas/perfiles: `/api/v1/cuentas`, `/api/v1/cuentas/perfiles`
+- Catalogo: `/api/v1/contenidos`, `/api/v1/generos`, `/api/v1/temporadas`, `/api/v1/episodios`
+- Playback: `/api/v1/contenidos/{id}/playback`, `/api/v1/episodios/{id}/playback`
+- PIN: `/api/v1/perfiles/{id}/desbloquear`
+- Progreso: `/api/v1/perfiles/{id}/vistas`
+- Continuar viendo: `/api/v1/perfiles/{id}/continuar`
+- Mi Lista: `/api/v1/perfiles/{id}/mi-lista`
+- Calificaciones: `/api/v1/perfiles/{id}/calificaciones/{contenido_id}`
+- Descargas: `/api/v1/perfiles/{id}/descargas`
+- Reportes: `/api/v1/reportes/visualizacion`
 
-El módulo de **users** tiene un endpoint completo (`POST /users`) con todas las capas implementadas como ejemplo de la sintaxis.
+## Documentacion del proyecto
 
-El resto de los métodos (`GET`, `PUT`, `DELETE`) y los demás dominios (`products`, `auth`) están con `...` / `pass` / comentarios `TODO`. **Tu trabajo es completarlos** siguiendo el patrón del ejemplo.
-
----
-
-## Reglas de la arquitectura
-
-1. `routers` no tocan la BD.
-2. `services` no tocan `Request` / `Response`.
-3. `repositories` no tienen lógica de negocio.
-4. `models` no salen del repository / service.
-5. `schemas` solo en routers.
-6. Al cliente siempre va un DTO, nunca un Model.
+- README general: `../README.md`
+- Modelo de datos / diagrama ER: `../docs/modelo-datos.md`
+- Script SQL: `../database.sql`

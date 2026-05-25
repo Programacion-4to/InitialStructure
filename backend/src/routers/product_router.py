@@ -15,17 +15,24 @@ from src.dtos import (
     CreateEpisodioDTO,
     CreateTemporadaDTO,
     CreateVistaDTO,
+    PerfilAuthDTO,
     CalificacionResponseDTO,
     ContenidoResponseDTO,
+    ContinuarViendoResponseDTO,
+    CreateDescargaDTO,
+    DescargaResponseDTO,
     EpisodioResponseDTO,
     GeneroResponseDTO,
     TemporadaResponseDTO,
     UpdateContenidoDTO,
     VistaResponseDTO,
+    ReporteVisualizacionDTO,
 )
+from src.schemas.auth_schema import PerfilAuthResponseSchema, PerfilAuthSchema
 from src.middlewares import get_current_user_from_swagger, get_owned_profile, require_admin
 from src.schemas.product_schema import (
     CreateEpisodioSchema,
+    CreateDescargaSchema,
     CreateTemporadaSchema,
     UpdateEpisodioSchema,
     UpdateTemporadaSchema,
@@ -35,12 +42,15 @@ from src.schemas.product_schema import (
 from src.services.product_service import (
     CalificacionService,
     ContenidoService,
+    DescargaService,
     EpisodioService,
     GeneroService,
     MiListaService,
+    ReporteService,
     TemporadaService,
     VistaService,
 )
+from src.services.auth_service import AuthService
 from src.dtos import UpdateEpisodioDTO, UpdateTemporadaDTO
 from src.services.storage_service import StorageService
 from src.utils import UnauthorizedError, create_access_token, decode_access_token
@@ -242,14 +252,28 @@ def get_contenido(contenido_id: int, db: Session = Depends(get_db)):
     return ContenidoService(db).get_by_id(contenido_id)
 
 
+@router.post("/contenidos/{contenido_id}/validar-publicacion")
+def validar_publicacion_contenido(
+    contenido_id: int,
+    _admin: Cuenta = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return ContenidoService(db).validate_catalog_ready(contenido_id)
+
+
 @router.get("/contenidos/{contenido_id}/playback")
 def get_contenido_playback(
     contenido_id: int,
     quality: str | None = None,
+    perfil_id: int | None = None,
     current_user: Cuenta = Depends(get_current_user_from_swagger),
     db: Session = Depends(get_db),
 ):
-    video = ContenidoService(db).get_video_source(contenido_id, quality)
+    if perfil_id is not None:
+        profile = db.query(Perfil).filter(Perfil.id == perfil_id).first()
+        if not profile or (profile.cuenta_id != current_user.id and not current_user.is_admin):
+            raise UnauthorizedError("Perfil no autorizado")
+    video = ContenidoService(db).get_video_source(contenido_id, quality, perfil_id=perfil_id)
     token = _create_media_token(current_user, "contenido", contenido_id, quality, "stream")
     return {
         "stream_url": (
@@ -396,10 +420,15 @@ def list_episodios(temporada_id: int, db: Session = Depends(get_db)):
 def get_episodio_playback(
     episodio_id: int,
     quality: str | None = None,
+    perfil_id: int | None = None,
     current_user: Cuenta = Depends(get_current_user_from_swagger),
     db: Session = Depends(get_db),
 ):
-    video = EpisodioService(db).get_video_source(episodio_id, quality)
+    if perfil_id is not None:
+        profile = db.query(Perfil).filter(Perfil.id == perfil_id).first()
+        if not profile or (profile.cuenta_id != current_user.id and not current_user.is_admin):
+            raise UnauthorizedError("Perfil no autorizado")
+    video = EpisodioService(db).get_video_source(episodio_id, quality, perfil_id=perfil_id)
     token = _create_media_token(current_user, "episodio", episodio_id, quality, "stream")
     return {
         "stream_url": (
@@ -517,7 +546,7 @@ def delete_vista_recurso(
     )
 
 
-@router.get("/perfiles/{perfil_id}/continuar", response_model=list[VistaResponseDTO])
+@router.get("/perfiles/{perfil_id}/continuar", response_model=list[ContinuarViendoResponseDTO])
 def continuar_viendo(
     perfil_id: int,
     profile: Perfil = Depends(get_owned_profile),
@@ -533,6 +562,17 @@ def recomendaciones(
     db: Session = Depends(get_db),
 ):
     return ContenidoService(db).recommendations(profile.id)
+
+
+@router.post("/perfiles/{perfil_id}/desbloquear", response_model=PerfilAuthResponseSchema)
+def desbloquear_perfil(
+    perfil_id: int,
+    payload: PerfilAuthSchema,
+    current_user: Cuenta = Depends(get_current_user_from_swagger),
+    db: Session = Depends(get_db),
+):
+    dto = PerfilAuthDTO(**payload.model_dump())
+    return AuthService(db).auth_perfil(current_user.id, perfil_id, dto)
 
 
 @router.post("/perfiles/{perfil_id}/mi-lista", response_model=list[ContenidoResponseDTO])
@@ -562,6 +602,50 @@ def remove_from_mi_lista(
     db: Session = Depends(get_db),
 ):
     return MiListaService(db).remove(profile.id, contenido_id)
+
+
+@router.post(
+    "/perfiles/{perfil_id}/descargas",
+    response_model=DescargaResponseDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_descarga(
+    perfil_id: int,
+    payload: CreateDescargaSchema,
+    profile: Perfil = Depends(get_owned_profile),
+    db: Session = Depends(get_db),
+):
+    dto = CreateDescargaDTO(perfil_id=profile.id, **payload.model_dump())
+    return DescargaService(db).create(dto)
+
+
+@router.get("/perfiles/{perfil_id}/descargas", response_model=list[DescargaResponseDTO])
+def list_descargas(
+    perfil_id: int,
+    profile: Perfil = Depends(get_owned_profile),
+    db: Session = Depends(get_db),
+):
+    return DescargaService(db).list(profile.id)
+
+
+@router.delete("/perfiles/{perfil_id}/descargas/{descarga_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_descarga(
+    perfil_id: int,
+    descarga_id: int,
+    profile: Perfil = Depends(get_owned_profile),
+    db: Session = Depends(get_db),
+):
+    DescargaService(db).delete(profile.id, descarga_id)
+
+
+@router.get("/reportes/visualizacion", response_model=ReporteVisualizacionDTO)
+def reporte_visualizacion(
+    anio: int,
+    mes: int,
+    _admin: Cuenta = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return ReporteService(db).visualizacion(anio=anio, mes=mes)
 
 
 @router.post(

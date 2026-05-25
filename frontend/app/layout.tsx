@@ -5,6 +5,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "TITOFLIX - Plataforma de Streaming",
   description: "Tu plataforma de streaming favorita. Peliculas, series y mucho mas.",
+  icons: {
+    icon: "/titoflix-logo.ico",
+  },
 };
 
 export default function RootLayout({

@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 
 from src.db import get_db
 from src.db.models import Cuenta
-from src.dtos import AdminLoginDTO, AuthAccountDTO, LoginDTO, PerfilAuthDTO, PerfilAuthResponseDTO, TokenDTO
+from src.dtos import AdminLoginDTO, AuthAccountDTO, LoginDTO, TokenDTO
 from src.middlewares import get_current_user_from_swagger
-from src.schemas import AuthAccountSchema, LoginSchema, PerfilAuthResponseSchema, PerfilAuthSchema, TokenSchema
+from src.schemas import AuthAccountSchema, LoginSchema, TokenSchema
 from src.schemas.auth_schema import AdminLoginSchema
 from src.services import AuthService
 
@@ -35,14 +35,3 @@ def me(
     account: AuthAccountDTO = AuthService(db).get_current_account(current_user.id)
     return AuthAccountSchema(**account.model_dump())
 
-
-@router.post("/perfiles/{perfil_id}", response_model=PerfilAuthResponseSchema)
-def auth_perfil(
-    perfil_id: int,
-    payload: PerfilAuthSchema,
-    current_user: Cuenta = Depends(get_current_user_from_swagger),
-    db: Session = Depends(get_db),
-):
-    dto = PerfilAuthDTO(**payload.model_dump())
-    response: PerfilAuthResponseDTO = AuthService(db).auth_perfil(current_user.id, perfil_id, dto)
-    return PerfilAuthResponseSchema(**response.model_dump())

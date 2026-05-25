@@ -3,6 +3,8 @@ from .product_mapper import (
     to_calificacion_response_list,   # Mapper para lista de Calificaciones
     to_contenido_response,           # Mapper para Contenido individual
     to_contenido_response_list,      # Mapper para lista de Contenidos
+    to_descarga_response,
+    to_descarga_response_list,
     to_episodio_response,            # Mapper para Episodio individual
     to_episodio_response_list,       # Mapper para lista de Episodios
     to_genero_response,              # Mapper para Género individual
@@ -30,6 +32,8 @@ __all__ = [
     "to_genero_response_list",       # Exporta lista de Géneros
     "to_contenido_response",         # Exporta mapper de Contenido
     "to_contenido_response_list",    # Exporta lista de Contenidos
+    "to_descarga_response",
+    "to_descarga_response_list",
     "to_product_response",           # Exporta mapper de Producto
     "to_product_response_list",      # Exporta lista de Productos
     "to_temporada_response",         # Exporta mapper de Temporada

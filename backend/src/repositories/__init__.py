@@ -1,6 +1,7 @@
 from .product_repository import (
     CalificacionRepository,          # Repositorio de Calificaciones
     ContenidoRepository,             # Repositorio de Contenido
+    DescargaRepository,
     EpisodioRepository,              # Repositorio de Episodios
     GeneroRepository,                # Repositorio de Géneros
     TemporadaRepository,             # Repositorio de Temporadas
@@ -15,6 +16,7 @@ __all__ = [               # Exporta Repositorio de Usuarios
     "PerfilRepository",              # Exporta Repositorio de Perfiles
     "GeneroRepository",              # Exporta Repositorio de Géneros
     "ContenidoRepository",           # Exporta Repositorio de Contenido
+    "DescargaRepository",
     "TemporadaRepository",           # Exporta Repositorio de Temporadas
     "VideoVariantRepository",
     "EpisodioRepository",            # Exporta Repositorio de Episodios

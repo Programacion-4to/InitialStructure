@@ -1,17 +1,24 @@
+from datetime import datetime, timedelta
+
 from fastapi import UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.dtos import (
     CalificacionResponseDTO,
+    ContinuarViendoResponseDTO,
     ContenidoResponseDTO,
     CreateCalificacionDTO,
     CreateContenidoDTO,
+    CreateDescargaDTO,
     CreateEpisodioDTO,
     CreateTemporadaDTO,
     CreateVistaDTO,
     EpisodioResponseDTO,
+    DescargaResponseDTO,
     GeneroResponseDTO,
+    ReporteVisualizacionDTO,
+    ReporteVisualizacionItemDTO,
     VideoProcessingWarningDTO,
     TemporadaResponseDTO,
     UpdateContenidoDTO,
@@ -24,6 +31,8 @@ from src.mappers import (
     to_calificacion_response,
     to_contenido_response,
     to_contenido_response_list,
+    to_descarga_response,
+    to_descarga_response_list,
     to_episodio_response,
     to_genero_response,
     to_genero_response_list,
@@ -34,6 +43,7 @@ from src.mappers import (
 from src.repositories import (
     CalificacionRepository,
     ContenidoRepository,
+    DescargaRepository,
     EpisodioRepository,
     GeneroRepository,
     TemporadaRepository,
@@ -168,6 +178,24 @@ class ContenidoService:
             raise NotFoundError("Contenido no encontrado")
         return to_contenido_response(contenido)
 
+    def validate_catalog_ready(self, contenido_id: int) -> dict[str, str]:
+        contenido = self.contenido_repo.find_by_id(contenido_id)
+        if not contenido:
+            raise NotFoundError("Contenido no encontrado")
+        if not contenido.generos:
+            raise ConflictError("Cada contenido debe tener al menos un genero")
+        if contenido.tipo == "pelicula":
+            if contenido.duracion_min is None or not contenido.video_storage_key:
+                raise ConflictError("Una pelicula debe tener video y duracion directa")
+            return {"message": "Contenido listo para publicar"}
+        if contenido.tipo == "serie":
+            if not contenido.temporadas:
+                raise ConflictError("Una serie debe tener al menos una temporada")
+            if any(not temporada.episodios for temporada in contenido.temporadas):
+                raise ConflictError("Cada temporada debe tener al menos un episodio")
+            return {"message": "Contenido listo para publicar"}
+        raise ConflictError("El tipo debe ser pelicula o serie")
+
     def search(self, q=None, tipo=None, genero_id=None, genero=None, perfil_id=None, ordenar=None):
         clasificacion_edad = None
         if perfil_id is not None:
@@ -289,10 +317,17 @@ class ContenidoService:
         )
         return to_contenido_response_list(contenidos)
 
-    def get_video_source(self, contenido_id: int, quality: str | None = None) -> VideoSourceDTO:
+    def get_video_source(
+        self,
+        contenido_id: int,
+        quality: str | None = None,
+        perfil_id: int | None = None,
+    ) -> VideoSourceDTO:
         contenido = self.contenido_repo.find_by_id(contenido_id)
         if not contenido:
             raise NotFoundError("Contenido no encontrado")
+        if perfil_id is not None:
+            self._validate_profile_can_access_content(perfil_id, contenido)
         if contenido.tipo != "pelicula":
             raise ConflictError("Las series se reproducen por episodio")
         variant = self._select_video_variant(contenido.video_variants, quality)
@@ -321,6 +356,10 @@ class ContenidoService:
         require_generos=True,
         require_duration=True,
     ):
+        if tipo is not None and tipo not in ("pelicula", "serie"):
+            raise ConflictError("El tipo debe ser pelicula o serie")
+        if tipo is None:
+            return
         if require_generos and not generos_ids:
             raise ConflictError("Cada contenido debe tener al menos un genero")
         if generos_ids is not None and len(generos_ids) == 0:
@@ -333,6 +372,13 @@ class ContenidoService:
             raise ConflictError("Una pelicula debe tener duracion")
         if tipo == "serie" and duracion_min is not None:
             raise ConflictError("Una serie no debe tener duracion directa")
+
+    def _validate_profile_can_access_content(self, perfil_id: int, contenido) -> None:
+        perfil = self.perfil_repo.find_by_id(perfil_id)
+        if not perfil:
+            raise NotFoundError("Perfil no encontrado")
+        if perfil.es_infantil and contenido.clasificacion_edad != "ATP":
+            raise ForbiddenError("El perfil infantil no puede reproducir este contenido")
 
     def _validate_video_file(self, video_file: UploadFile) -> None:
         content_type = video_file.content_type or ""
@@ -425,6 +471,7 @@ class EpisodioService:
     def __init__(self, db: Session):
         self.temporada_repo = TemporadaRepository(db)
         self.episodio_repo = EpisodioRepository(db)
+        self.perfil_repo = PerfilRepository(db)
         self.video_variant_repo = VideoVariantRepository(db)
 
     def create(self, dto: CreateEpisodioDTO) -> EpisodioResponseDTO:
@@ -570,10 +617,22 @@ class EpisodioService:
         if not self.episodio_repo.delete(episodio_id):
             raise NotFoundError("Episodio no encontrado")
 
-    def get_video_source(self, episodio_id: int, quality: str | None = None) -> VideoSourceDTO:
+    def get_video_source(
+        self,
+        episodio_id: int,
+        quality: str | None = None,
+        perfil_id: int | None = None,
+    ) -> VideoSourceDTO:
         episodio = self.episodio_repo.find_by_id(episodio_id)
         if not episodio:
             raise NotFoundError("Episodio no encontrado")
+        if perfil_id is not None:
+            perfil = self.perfil_repo.find_by_id(perfil_id)
+            if not perfil:
+                raise NotFoundError("Perfil no encontrado")
+            contenido = episodio.temporada.contenido
+            if perfil.es_infantil and contenido.clasificacion_edad != "ATP":
+                raise ForbiddenError("El perfil infantil no puede reproducir este contenido")
         variant = self._select_video_variant(episodio.video_variants, quality)
         if variant:
             return VideoSourceDTO(
@@ -704,10 +763,56 @@ class VistaService:
         if not deleted:
             raise NotFoundError("Vista no encontrada")
 
-    def continuar_viendo(self, perfil_id: int) -> list[VistaResponseDTO]:
+    def continuar_viendo(self, perfil_id: int) -> list[ContinuarViendoResponseDTO]:
         if not self.perfil_repo.find_by_id(perfil_id):
             raise NotFoundError("Perfil no encontrado")
-        return to_vista_response_list(self.vista_repo.continuar_viendo(perfil_id)[:10])
+        items: list[ContinuarViendoResponseDTO] = []
+        seen_content_ids: set[int] = set()
+
+        for vista in self.vista_repo.continuar_viendo(perfil_id):
+            contenido = vista.contenido
+            episodio = vista.episodio
+            if episodio is not None:
+                contenido = episodio.temporada.contenido
+
+            if contenido is None or contenido.id in seen_content_ids:
+                continue
+
+            seen_content_ids.add(contenido.id)
+            next_episode = episodio
+            if contenido.tipo == "serie":
+                episodios = [
+                    ep
+                    for temporada in sorted(contenido.temporadas, key=lambda t: t.numero)
+                    for ep in sorted(temporada.episodios, key=lambda e: e.numero)
+                ]
+                finished_episode_ids = {
+                    v.episodio_id
+                    for v in self.vista_repo.list_by_perfil(perfil_id)
+                    if v.episodio_id is not None and v.terminado
+                }
+                next_episode = next(
+                    (ep for ep in episodios if ep.id not in finished_episode_ids),
+                    episodio,
+                )
+
+            items.append(
+                ContinuarViendoResponseDTO(
+                    contenido=to_contenido_response(contenido),
+                    episodio=to_episodio_response(next_episode) if next_episode else None,
+                    temporada=to_temporada_response(next_episode.temporada) if next_episode else None,
+                    segundos_vistos=vista.segundos_vistos,
+                    duracion_total=int(
+                        (next_episode.duracion_min if next_episode else contenido.duracion_min or 0) * 60
+                    ),
+                    terminado=vista.terminado,
+                    actualizado_en=vista.fecha,
+                )
+            )
+            if len(items) == 10:
+                break
+
+        return items
 
 
 class MiListaService:
@@ -742,6 +847,143 @@ class MiListaService:
         if perfil.es_infantil:
             contenidos = [c for c in contenidos if c.clasificacion_edad == "ATP"]
         return to_contenido_response_list(contenidos)
+
+
+DOWNLOAD_LIMITS = {
+    "basico": 0,
+    "estandar": 10,
+    "premium": 30,
+}
+
+
+class DescargaService:
+    def __init__(self, db: Session):
+        self.perfil_repo = PerfilRepository(db)
+        self.contenido_repo = ContenidoRepository(db)
+        self.episodio_repo = EpisodioRepository(db)
+        self.descarga_repo = DescargaRepository(db)
+
+    def create(self, dto: CreateDescargaDTO) -> DescargaResponseDTO:
+        perfil = self.perfil_repo.find_by_id(dto.perfil_id)
+        if not perfil:
+            raise NotFoundError("Perfil no encontrado")
+
+        if (dto.episodio_id is None and dto.contenido_id is None) or (
+            dto.episodio_id is not None and dto.contenido_id is not None
+        ):
+            raise ConflictError("La descarga debe indicar un episodio o un contenido")
+
+        contenido = None
+        if dto.contenido_id is not None:
+            contenido = self.contenido_repo.find_by_id(dto.contenido_id)
+            if not contenido:
+                raise NotFoundError("Contenido no encontrado")
+            if contenido.tipo != "pelicula":
+                raise ConflictError("Las series se descargan por episodio")
+
+        if dto.episodio_id is not None:
+            episodio = self.episodio_repo.find_by_id(dto.episodio_id)
+            if not episodio:
+                raise NotFoundError("Episodio no encontrado")
+            contenido = episodio.temporada.contenido
+
+        if perfil.es_infantil and contenido.clasificacion_edad != "ATP":
+            raise ForbiddenError("El perfil infantil no puede descargar este contenido")
+
+        now = datetime.utcnow()
+        plan = perfil.cuenta.plan
+        limit = DOWNLOAD_LIMITS.get(plan, 0)
+        if self.descarga_repo.active_count_by_cuenta(perfil.cuenta_id, now) >= limit:
+            raise ConflictError("Se supero el limite de descargas activas del plan")
+
+        descarga = self.descarga_repo.create(
+            perfil_id=dto.perfil_id,
+            episodio_id=dto.episodio_id,
+            contenido_id=dto.contenido_id,
+            vence_en=now + timedelta(days=30),
+        )
+        return to_descarga_response(descarga)
+
+    def list(self, perfil_id: int) -> list[DescargaResponseDTO]:
+        perfil = self.perfil_repo.find_by_id(perfil_id)
+        if not perfil:
+            raise NotFoundError("Perfil no encontrado")
+        now = datetime.utcnow()
+        descargas = [
+            descarga
+            for descarga in self.descarga_repo.list_by_perfil(perfil_id)
+            if not descarga.eliminada and descarga.vence_en > now
+        ]
+        return to_descarga_response_list(descargas)
+
+    def delete(self, perfil_id: int, descarga_id: int) -> None:
+        descarga = self.descarga_repo.find_by_id(descarga_id)
+        if not descarga or descarga.perfil_id != perfil_id:
+            raise NotFoundError("Descarga no encontrada")
+        self.descarga_repo.mark_deleted(descarga_id)
+
+
+class ReporteService:
+    def __init__(self, db: Session):
+        self.contenido_repo = ContenidoRepository(db)
+
+    def visualizacion(self, anio: int, mes: int) -> ReporteVisualizacionDTO:
+        if mes < 1 or mes > 12:
+            raise ConflictError("El mes debe estar entre 1 y 12")
+
+        items: list[ReporteVisualizacionItemDTO] = []
+        total_minutos = 0
+        por_genero: dict[str, int] = {}
+
+        for contenido in self.contenido_repo.list_all():
+            segundos = 0
+            for vista in contenido.vistas:
+                if self._vista_cuenta(vista, anio, mes, contenido.duracion_min):
+                    segundos += int(vista.segundos_vistos or 0)
+
+            for temporada in contenido.temporadas:
+                for episodio in temporada.episodios:
+                    for vista in episodio.vistas:
+                        if self._vista_cuenta(vista, anio, mes, episodio.duracion_min):
+                            segundos += int(vista.segundos_vistos or 0)
+
+            minutos = segundos // 60
+            if minutos <= 0:
+                continue
+
+            total_minutos += minutos
+            generos = [genero.nombre for genero in contenido.generos]
+            for genero in generos:
+                por_genero[genero] = por_genero.get(genero, 0) + minutos
+
+            items.append(
+                ReporteVisualizacionItemDTO(
+                    contenido_id=contenido.id,
+                    titulo=contenido.titulo,
+                    tipo=contenido.tipo,
+                    minutos_vistos=minutos,
+                    generos=generos,
+                )
+            )
+
+        items.sort(key=lambda item: (-item.minutos_vistos, item.titulo))
+        return ReporteVisualizacionDTO(
+            anio=anio,
+            mes=mes,
+            total_minutos=total_minutos,
+            total_contenidos=len(items),
+            por_genero=por_genero,
+            contenidos=items[:20],
+        )
+
+    def _vista_cuenta(self, vista, anio: int, mes: int, duracion_min: float | None) -> bool:
+        if not vista.fecha or vista.fecha.year != anio or vista.fecha.month != mes:
+            return False
+        if vista.terminado:
+            return True
+        if duracion_min is None:
+            return False
+        return vista.segundos_vistos >= duracion_min * 60 * 0.9
 
 
 class CalificacionService:
