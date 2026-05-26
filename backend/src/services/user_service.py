@@ -179,6 +179,8 @@ class PerfilService:                                            # Servicio para 
 
         if "pin" in fields:
             fields["pin"] = hash_password(fields["pin"]) if fields["pin"] else None
+            fields["pin_intentos_fallidos"] = 0
+            fields["pin_bloqueado_hasta"] = None
 
         if "avatar" in fields:
             avatar = fields["avatar"]

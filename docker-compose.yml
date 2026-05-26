@@ -76,6 +76,10 @@ services:
       context: ./frontend
       args:
         INTERNAL_BACKEND_URL: ${INTERNAL_BACKEND_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_DIRECT_API_URL: ${NEXT_PUBLIC_DIRECT_API_URL}
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+        NEXT_PUBLIC_MAX_UPLOAD_SIZE: ${NEXT_PUBLIC_MAX_UPLOAD_SIZE}
     container_name: titoflix-frontend
     environment:
       INTERNAL_BACKEND_URL: ${INTERNAL_BACKEND_URL}

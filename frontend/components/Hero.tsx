@@ -1,13 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Play, List } from "lucide-react";
 
-interface HeroProps {
-  onExplore: () => void;
-  onMiLista: () => void;
-}
-
-export function Hero({ onExplore, onMiLista }: HeroProps) {
+export function Hero() {
   return (
     <div className="relative h-[80vh] md:h-[90vh] w-full flex items-center">
       {/* Background with overlay */}
@@ -42,20 +38,20 @@ export function Hero({ onExplore, onMiLista }: HeroProps) {
         
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row gap-4">
-          <button
-            onClick={onExplore}
+          <Link
+            href="/peliculas"
             className="flex items-center justify-center gap-2 px-8 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Play size={20} fill="currentColor" />
             Explorar
-          </button>
-          <button
-            onClick={onMiLista}
+          </Link>
+          <Link
+            href="/mi-lista"
             className="flex items-center justify-center gap-2 px-8 py-3 bg-secondary text-secondary-foreground font-semibold rounded-lg hover:bg-secondary/80 transition-colors border border-border"
           >
             <List size={20} />
             Mi lista
-          </button>
+          </Link>
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ from src.db.models.user_model import Cuenta, Perfil          # Modelos de usuari
 from src.db.models.product_model import (                    # Modelos de producto
     Calificacion,                                            # Modelo de calificación
     Contenido,                                               # Modelo de contenido
+    Descarga,
     Episodio,                                                # Modelo de episodio
     Genero,                                                  # Modelo de género
     Temporada,                                               # Modelo de temporada
@@ -16,6 +17,7 @@ __all__ = [
     "Perfil",                                                # Exporta modelo Perfil
     "Genero",                                                # Exporta modelo Género
     "Contenido",                                             # Exporta modelo Contenido
+    "Descarga",
     "Temporada",                                             # Exporta modelo Temporada
     "Episodio",                                              # Exporta modelo Episodio
     "VideoVariant",

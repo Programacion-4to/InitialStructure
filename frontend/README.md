@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Titoflix Frontend
 
-## Getting Started
+Frontend de Titoflix hecho con Next.js. Consume la API REST del backend y muestra login, perfiles, catalogo, reproduccion, Mi Lista, recomendaciones y consola admin.
 
-First, run the development server:
+## Como correrlo
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Con Docker, recomendado
+
+Desde la raiz del proyecto:
+
+```powershell
+docker compose up -d --build frontend
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+En la practica conviene levantar todo el stack:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+docker compose up -d --build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Sin Docker
 
-## Learn More
+Desde `frontend/`:
 
-To learn more about Next.js, take a look at the following resources:
+```powershell
+npm install
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## URLs
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Misma maquina:
 
-## Deploy on Vercel
+- Frontend: `http://localhost:3000`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Desde otro dispositivo de la red:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Frontend: `http://[IP_LOCAL]:3000`
+
+Con tunel publico apuntando al frontend:
+
+- Frontend: `[URL_DE_TUNEL]`
+- API: `[URL_DE_TUNEL]/api/v1`
+
+## Variables importantes
+
+El frontend usa estas variables en Docker/build:
+
+- `NEXT_PUBLIC_API_URL`: URL base usada por el navegador para llamar a la API.
+- `NEXT_PUBLIC_DIRECT_API_URL`: URL alternativa para llamadas directas si se necesita.
+- `NEXT_PUBLIC_BACKEND_URL`: prefijo para URLs de streaming devueltas por el backend.
+- `INTERNAL_BACKEND_URL`: URL interna usada por Next.js cuando hace proxy desde el contenedor.
+
+Configuracion recomendada para Docker/local:
+
+```env
+NEXT_PUBLIC_API_URL=/api/v1
+NEXT_PUBLIC_DIRECT_API_URL=/api/v1
+NEXT_PUBLIC_BACKEND_URL=
+INTERNAL_BACKEND_URL=http://backend:8000
+```
+
+Si se prueba desde otro dispositivo con frontend directo por IP y sin proxy, puede usarse:
+
+```env
+NEXT_PUBLIC_API_URL=http://[IP_LOCAL]:8000/api/v1
+NEXT_PUBLIC_BACKEND_URL=http://[IP_LOCAL]:8000
+```
+
+Si se usa tunel, reemplazar por:
+
+```env
+NEXT_PUBLIC_API_URL=[URL_DE_TUNEL]/api/v1
+NEXT_PUBLIC_BACKEND_URL=[URL_DE_TUNEL]
+```
+
+## MinIO
+
+El usuario del frontend no deberia hablar directo con MinIO. La app pide assets y videos al backend, y el backend lee/escribe en MinIO por la red interna de Docker.
+
+La consola de MinIO queda para administracion:
+
+- Host local: `http://localhost:9001`
+- LAN: `http://[IP_LOCAL]:9001`
+
+No conviene exponer MinIO por tunel salvo que sea una decision explicita de administracion.
+
+## Documentacion del proyecto
+
+- README general: `../README.md`
+- Backend: `../backend/README.md`
+- Modelo de datos / diagrama ER: `../docs/modelo-datos.md`

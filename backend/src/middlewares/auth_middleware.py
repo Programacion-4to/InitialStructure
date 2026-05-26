@@ -17,7 +17,7 @@ cuenta_auth_scheme = HTTPBearer(
 perfil_auth_scheme = HTTPBearer(
     auto_error=False,
     scheme_name="PerfilAuth",
-    description="Token de perfil obtenido en /api/v1/auth/perfiles/{perfil_id}",
+    description="Token de perfil obtenido al desbloquear /api/v1/perfiles/{perfil_id}/desbloquear",
 )
 
 

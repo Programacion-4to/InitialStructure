@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Film, Loader2, LogOut, Play, Plus, RefreshCw, Tv, Upload } from "lucide-react";
+import { BarChart3, Film, Loader2, LogOut, Play, Plus, RefreshCw, Tv, Upload } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
-import { apiRequest, getAssetUrl, getBackendUrl, logout, MAX_UPLOAD_SIZE } from "@/lib/api";
+import { apiRequest, getAssetUrl, getBackendUrl, logout, MAX_UPLOAD_SIZE, getReporteVisualizacion, type ReporteVisualizacion } from "@/lib/api";
 import type { Contenido, Episodio, Genero, PlaybackResponse, Temporada, VideoVariant } from "@/lib/types";
 
 interface AdminDashboardProps {
@@ -11,7 +11,7 @@ interface AdminDashboardProps {
 }
 
 type Message = { type: "ok" | "error"; text: string } | null;
-type AdminTab = "crear" | "modificar" | "eliminar";
+type AdminTab = "crear" | "modificar" | "eliminar" | "reportes";
 type PlaybackResource = {
   type: "contenido" | "episodio";
   id: number;
@@ -53,6 +53,12 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [contenidoFormMessage, setContenidoFormMessage] = useState<Message>(null);
   const [episodioFormMessage, setEpisodioFormMessage] = useState<Message>(null);
   const [message, setMessage] = useState<Message>(null);
+
+  // HU14: Reporte de visualizacion state
+  const [reporteAnio, setReporteAnio] = useState(new Date().getFullYear());
+  const [reporteMes, setReporteMes] = useState(new Date().getMonth() + 1);
+  const [reporte, setReporte] = useState<ReporteVisualizacion | null>(null);
+  const [reporteLoading, setReporteLoading] = useState(false);
 
   const selectedContenido = useMemo(
     () => contenidos.find((contenido) => contenido.id === Number(selectedContenidoId)),
@@ -188,6 +194,20 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   const showOk = (text: string) => setMessage({ type: "ok", text });
+
+  // HU14: Load visualization report
+  const loadReporte = async () => {
+    setReporteLoading(true);
+    try {
+      const data = await getReporteVisualizacion(reporteAnio, reporteMes);
+      setReporte(data);
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo cargar el reporte" });
+      setReporte(null);
+    } finally {
+      setReporteLoading(false);
+    }
+  };
 
   const handleGeneroSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -579,6 +599,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
             ["crear", "Crear"],
             ["modificar", "Modificar"],
             ["eliminar", "Eliminar"],
+            ["reportes", "Reportes"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -999,6 +1020,144 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   })
                 }
               />
+            </AdminPanel>
+          </section>
+        )}
+
+        {/* HU14: Tab de Reportes de Visualizacion */}
+        {activeTab === "reportes" && (
+          <section className="grid gap-4">
+            <AdminPanel title="Reporte de visualizacion mensual">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                <div className="grid gap-2">
+                  <label htmlFor="reporte-anio" className="text-xs font-medium text-muted-foreground">
+                    Anio
+                  </label>
+                  <input
+                    id="reporte-anio"
+                    type="number"
+                    min="2020"
+                    max={new Date().getFullYear()}
+                    value={reporteAnio}
+                    onChange={(e) => setReporteAnio(Number(e.target.value))}
+                    className="admin-input w-28"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label htmlFor="reporte-mes" className="text-xs font-medium text-muted-foreground">
+                    Mes
+                  </label>
+                  <select
+                    id="reporte-mes"
+                    value={reporteMes}
+                    onChange={(e) => setReporteMes(Number(e.target.value))}
+                    className="admin-input w-40"
+                  >
+                    {[
+                      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+                    ].map((mes, i) => (
+                      <option key={i + 1} value={i + 1}>{mes}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadReporte}
+                  disabled={reporteLoading}
+                  className="admin-button"
+                >
+                  {reporteLoading ? <Loader2 size={18} className="animate-spin" /> : <BarChart3 size={18} />}
+                  {reporteLoading ? "Cargando..." : "Generar reporte"}
+                </button>
+              </div>
+
+              {reporte && (
+                <div className="mt-6 space-y-6">
+                  {/* Resumen general */}
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="rounded-lg border border-border bg-secondary/50 p-4">
+                      <p className="text-xs text-muted-foreground">Total minutos vistos</p>
+                      <p className="text-2xl font-bold text-foreground">{reporte.total_minutos.toLocaleString()}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-secondary/50 p-4">
+                      <p className="text-xs text-muted-foreground">Contenidos vistos</p>
+                      <p className="text-2xl font-bold text-foreground">{reporte.total_contenidos}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-secondary/50 p-4">
+                      <p className="text-xs text-muted-foreground">Periodo</p>
+                      <p className="text-2xl font-bold text-foreground">
+                        {["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"][reporte.mes - 1]} {reporte.anio}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Desglose por genero */}
+                  {Object.keys(reporte.por_genero).length > 0 && (
+                    <div>
+                      <h3 className="mb-3 text-sm font-semibold text-foreground">Minutos por genero</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(reporte.por_genero)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([genero, minutos]) => (
+                            <div key={genero} className="rounded-full bg-primary/15 px-3 py-1.5 text-xs">
+                              <span className="font-semibold text-primary">{genero}</span>
+                              <span className="ml-1 text-muted-foreground">{minutos.toLocaleString()} min</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Top 20 contenidos */}
+                  <div>
+                    <h3 className="mb-3 text-sm font-semibold text-foreground">
+                      Top {reporte.contenidos.length} contenidos mas vistos
+                    </h3>
+                    {reporte.contenidos.length === 0 ? (
+                      <div className="rounded-lg border border-border bg-secondary/40 px-4 py-8 text-center text-sm text-muted-foreground">
+                        No hay datos de visualizacion para este periodo.
+                      </div>
+                    ) : (
+                      <div className="max-h-96 overflow-y-auto pr-2">
+                        <div className="space-y-2">
+                          {reporte.contenidos.map((item, index) => (
+                            <div
+                              key={item.contenido_id}
+                              className="flex items-center gap-4 rounded-lg border border-border bg-secondary/50 px-4 py-3"
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary">
+                                {index + 1}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  {item.tipo === "pelicula" ? <Film size={14} /> : <Tv size={14} />}
+                                  <span className="truncate font-medium text-foreground">{item.titulo}</span>
+                                </div>
+                                <div className="mt-0.5 flex flex-wrap gap-1">
+                                  {item.generos.map((g) => (
+                                    <span key={g} className="text-xs text-muted-foreground">{g}</span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-semibold text-foreground">{item.minutos_vistos.toLocaleString()}</p>
+                                <p className="text-xs text-muted-foreground">minutos</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!reporte && !reporteLoading && (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Selecciona un anio y mes, luego haz clic en &quot;Generar reporte&quot; para ver las estadisticas de visualizacion.
+                </p>
+              )}
             </AdminPanel>
           </section>
         )}

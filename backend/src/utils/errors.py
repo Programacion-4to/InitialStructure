@@ -1,39 +1,44 @@
-class AppError(Exception):                                      # Clase base para todas las excepciones de la app
-    status_code: int = 500                                      # Código HTTP por defecto (Internal Server Error)
-    message: str = "Internal error"                             # Mensaje de error por defecto
+class AppError(Exception):
+    status_code: int = 500
+    message: str = "Internal error"
 
-    def __init__(self, message: str | None = None):             # Constructor de la excepción
-        if message:                                             # Si se proporciona un mensaje personalizado
-            self.message = message                              # Se sobrescribe el mensaje base
-
-        super().__init__(self.message)                          # Inicializa la clase base de Python
-
-
-class BadRequestError(AppError):                                # Error para peticiones mal formadas
-    status_code = 400                                           # Código HTTP 400
-    message = "Bad request"                                     # Mensaje: Petición incorrecta
+    def __init__(self, message: str | None = None, **extra):
+        if message:
+            self.message = message
+        self.extra = extra
+        super().__init__(self.message)
 
 
-class UnauthorizedError(AppError):                              # Error para falta de credenciales
-    status_code = 401                                           # Código HTTP 401
-    message = "Unauthorized"                                    # Mensaje: No autorizado
+class BadRequestError(AppError):
+    status_code = 400
+    message = "Bad request"
 
 
-class ForbiddenError(AppError):                                 # Error para falta de permisos (ej. Control Parental)
-    status_code = 403                                           # Código HTTP 403
-    message = "Forbidden"                                       # Mensaje: Prohibido
+class UnauthorizedError(AppError):
+    status_code = 401
+    message = "Unauthorized"
 
 
-class NotFoundError(AppError):                                  # Error para recursos que no existen
-    status_code = 404                                           # Código HTTP 404
-    message = "Resource not found"                              # Mensaje: Recurso no encontrado
+class ForbiddenError(AppError):
+    status_code = 403
+    message = "Forbidden"
 
 
-class ConflictError(AppError):                                  # Error para conflictos de lógica (ej. Email duplicado)
-    status_code = 409                                           # Código HTTP 409
-    message = "Conflict"                                        # Mensaje: Conflicto
+class NotFoundError(AppError):
+    status_code = 404
+    message = "Resource not found"
 
 
-class ValidationError(AppError):                                # Error para fallos de esquema o datos inválidos
-    status_code = 422                                           # Código HTTP 422
-    message = "Validation error"                                # Mensaje: Error de validación
+class ConflictError(AppError):
+    status_code = 409
+    message = "Conflict"
+
+
+class LockedError(AppError):
+    status_code = 423
+    message = "Locked"
+
+
+class ValidationError(AppError):
+    status_code = 422
+    message = "Validation error"

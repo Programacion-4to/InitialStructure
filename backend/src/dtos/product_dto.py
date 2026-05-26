@@ -153,6 +153,16 @@ class VistaResponseDTO(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ContinuarViendoResponseDTO(BaseModel):
+    contenido: ContenidoResponseDTO
+    episodio: EpisodioResponseDTO | None = None
+    temporada: TemporadaResponseDTO | None = None
+    segundos_vistos: int
+    duracion_total: int
+    terminado: bool
+    actualizado_en: datetime | None = None
+
+
 class CreateCalificacionDTO(BaseModel):
     perfil_id: int
     contenido_id: int
@@ -172,6 +182,41 @@ class CalificacionResponseDTO(BaseModel):
 class MiListaDTO(BaseModel):
     perfil_id: int
     contenido_id: int
+
+
+class CreateDescargaDTO(BaseModel):
+    perfil_id: int
+    episodio_id: int | None = None
+    contenido_id: int | None = None
+
+
+class DescargaResponseDTO(BaseModel):
+    id: int
+    perfil_id: int
+    episodio_id: int | None = None
+    contenido_id: int | None = None
+    fecha_descarga: datetime | None = None
+    vence_en: datetime
+    eliminada: bool
+
+    model_config = {"from_attributes": True}
+
+
+class ReporteVisualizacionItemDTO(BaseModel):
+    contenido_id: int
+    titulo: str
+    tipo: str
+    minutos_vistos: int
+    generos: list[str]
+
+
+class ReporteVisualizacionDTO(BaseModel):
+    anio: int
+    mes: int
+    total_minutos: int
+    total_contenidos: int
+    por_genero: dict[str, int]
+    contenidos: list[ReporteVisualizacionItemDTO]
 
 
 CreateProductDTO = CreateContenidoDTO

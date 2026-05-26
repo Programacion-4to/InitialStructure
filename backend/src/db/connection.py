@@ -23,6 +23,7 @@ def create_tables():
     """Crea todas las tablas en la BD y agrega columnas nuevas en bases existentes."""
     Base.metadata.create_all(bind=engine)
     ensure_account_admin_column()
+    ensure_profile_pin_lock_columns()
     ensure_storage_media_columns()
     ensure_asset_media_columns()
     ensure_duration_columns_are_float()
@@ -45,6 +46,27 @@ def ensure_account_admin_column():
         connection.execute(
             text("ALTER TABLE cuentas ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE")
         )
+
+
+def ensure_profile_pin_lock_columns():
+    """Agrega columnas para limitar intentos de PIN en perfiles existentes."""
+    inspector = inspect(engine)
+    if not inspector.has_table("perfiles"):
+        return
+
+    column_names = {column["name"] for column in inspector.get_columns("perfiles")}
+    statements = []
+    if "pin_intentos_fallidos" not in column_names:
+        statements.append("ALTER TABLE perfiles ADD COLUMN pin_intentos_fallidos INTEGER NOT NULL DEFAULT 0")
+    if "pin_bloqueado_hasta" not in column_names:
+        statements.append("ALTER TABLE perfiles ADD COLUMN pin_bloqueado_hasta TIMESTAMP")
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
 
 
 def ensure_storage_media_columns():

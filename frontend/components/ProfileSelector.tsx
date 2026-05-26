@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus } from "lucide-react";
+import { Lock, Plus } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
-import { apiRequest, setSelectedProfile } from "@/lib/api";
+import { apiRequest, desbloquearPerfil, setSelectedProfile } from "@/lib/api";
+import { PinModal } from "./PinModal";
+import { ProfileAvatar } from "./ProfileAvatar";
 import type { Profile } from "@/lib/types";
 
 interface ProfileSelectorProps {
@@ -22,6 +24,7 @@ const planLimits = {
 
 export function ProfileSelector({ accountId, accountPlan, onProfileSelect, onNoProfiles, onCreateProfile }: ProfileSelectorProps) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [selectedProfileForPin, setSelectedProfileForPin] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const canCreateProfile = profiles.length < planLimits[accountPlan];
@@ -45,10 +48,39 @@ export function ProfileSelector({ accountId, accountPlan, onProfileSelect, onNoP
     fetchProfiles();
   }, [accountId, onNoProfiles]);
 
-  const handleProfileSelect = (profile: Profile) => {
+  const completeProfileSelection = (profile: Profile) => {
     const selectedProfile = { id: profile.id, nombre: profile.nombre };
     setSelectedProfile(selectedProfile);
     onProfileSelect(selectedProfile);
+  };
+
+  const handleProfileSelect = (profile: Profile) => {
+    if (profile.has_pin) {
+      setSelectedProfileForPin(profile);
+      return;
+    }
+    completeProfileSelection(profile);
+  };
+
+  const handlePinSubmit = async (pin: string): Promise<{ success: boolean; error?: string; blockedUntil?: string }> => {
+    if (!selectedProfileForPin) {
+      return { success: false, error: "No hay perfil seleccionado" };
+    }
+
+    try {
+      await desbloquearPerfil(selectedProfileForPin.id, pin);
+      completeProfileSelection(selectedProfileForPin);
+      return { success: true };
+    } catch (err) {
+      const blockedUntil = err instanceof Error && "blockedUntil" in err
+        ? (err as { blockedUntil?: string }).blockedUntil
+        : undefined;
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "PIN invalido",
+        blockedUntil,
+      };
+    }
   };
 
   return (
@@ -80,16 +112,13 @@ export function ProfileSelector({ accountId, accountPlan, onProfileSelect, onNoP
               onClick={() => handleProfileSelect(profile)}
               className="group flex flex-col items-center gap-3 focus:outline-none"
             >
-              <div className="w-28 h-28 md:w-36 md:h-36 rounded-lg overflow-hidden border-2 border-transparent group-hover:border-tito-white group-focus:border-tito-white transition-all duration-200">
-                {/* Avatar with Italian flag gradient */}
-                <div 
-                  className="w-full h-full flex items-center justify-center text-4xl md:text-5xl font-bold text-white"
-                  style={{
-                    background: `linear-gradient(135deg, #009246 0%, #009246 33%, #ffffff 33%, #ffffff 66%, #ce2b37 66%, #ce2b37 100%)`,
-                  }}
-                >
-                  {profile.nombre.charAt(0).toUpperCase()}
-                </div>
+              <div className="relative rounded-lg border-2 border-transparent transition-all duration-200 group-hover:border-tito-white group-focus:border-tito-white">
+                <ProfileAvatar profile={profile} size="lg" />
+                {profile.has_pin && (
+                  <div className="absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background/90">
+                    <Lock size={14} className="text-muted-foreground" />
+                  </div>
+                )}
               </div>
               <span className="text-muted-foreground group-hover:text-foreground transition-colors text-sm md:text-base">
                 {profile.nombre}
@@ -115,6 +144,13 @@ export function ProfileSelector({ accountId, accountPlan, onProfileSelect, onNoP
             </span>
           </button>
         </div>
+      )}
+      {selectedProfileForPin && (
+        <PinModal
+          profileName={selectedProfileForPin.nombre}
+          onSubmit={handlePinSubmit}
+          onCancel={() => setSelectedProfileForPin(null)}
+        />
       )}
     </div>
   );

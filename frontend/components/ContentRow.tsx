@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRef } from "react";
 import { ContentCard, ContentCardSkeleton } from "./ContentCard";
@@ -9,7 +10,8 @@ interface ContentRowProps {
   title: string;
   contents: Contenido[];
   loading?: boolean;
-  onContentClick: (content: Contenido) => void;
+  onContentClick?: (content: Contenido) => void;
+  linkPrefix?: string;
   emptyMessage?: string;
 }
 
@@ -18,6 +20,7 @@ export function ContentRow({
   contents,
   loading = false,
   onContentClick,
+  linkPrefix,
   emptyMessage = "No hay contenido disponible en este momento.",
 }: ContentRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -40,20 +43,20 @@ export function ContentRow({
         </h2>
       </div>
 
-      <div className="relative group">
+      <div className="relative group/row">
         {/* Scroll buttons */}
         {!loading && contents.length > 4 && (
           <>
             <button
               onClick={() => scroll("left")}
-              className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-background/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-background/80 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-background"
               aria-label="Desplazar a la izquierda"
             >
               <ChevronLeft size={24} className="text-foreground" />
             </button>
             <button
               onClick={() => scroll("right")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-background/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background"
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-background/80 rounded-full flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-background"
               aria-label="Desplazar a la derecha"
             >
               <ChevronRight size={24} className="text-foreground" />
@@ -75,11 +78,17 @@ export function ContentRow({
           ) : contents.length > 0 ? (
             // Content cards
             contents.map((content) => (
-              <ContentCard
-                key={content.id}
-                content={content}
-                onClick={() => onContentClick(content)}
-              />
+              linkPrefix ? (
+                <Link key={content.id} href={`${linkPrefix}/${content.id}`}>
+                  <ContentCard content={content} />
+                </Link>
+              ) : (
+                <ContentCard
+                  key={content.id}
+                  content={content}
+                  onClick={() => onContentClick?.(content)}
+                />
+              )
             ))
           ) : (
             // Empty state

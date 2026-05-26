@@ -107,10 +107,22 @@ export interface MiListaItem {
   contenido?: Contenido;
 }
 
-export interface ContinuarViendoItem {
+export interface Vista {
   id: number;
   perfil_id: number;
-  contenido_id: number;
-  contenido?: Contenido;
-  progreso?: number;
+  contenido_id?: number | null;
+  episodio_id?: number | null;
+  segundos_vistos: number;
+  terminado: boolean;
+  actualizado_en?: string;
+}
+
+export interface ContinuarViendoItem {
+  contenido: Contenido;
+  episodio?: Episodio | null;
+  temporada?: Temporada | null;
+  segundos_vistos: number;
+  duracion_total: number;
+  terminado: boolean;
+  actualizado_en?: string;
 }

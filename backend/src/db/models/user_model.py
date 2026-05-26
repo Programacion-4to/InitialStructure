@@ -29,6 +29,8 @@ class Perfil(Base):                                           # Modelo de datos 
     cuenta_id = Column(Integer, ForeignKey("cuentas.id"), nullable=False) # FK vinculada a la Cuenta
     nombre = Column(String, nullable=False)                   # Nombre del perfil
     pin = Column(String, nullable=True)                       # Código PIN opcional para acceso
+    pin_intentos_fallidos = Column(Integer, default=0, nullable=False)
+    pin_bloqueado_hasta = Column(DateTime, nullable=True)
     es_infantil = Column(Boolean, default=False)              # Flag para filtro de contenido infantil
     avatar = Column(String, nullable=True)                    # Ruta o identificador del avatar seleccionado
 

@@ -4,6 +4,26 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 const DIRECT_API_BASE_URL = process.env.NEXT_PUBLIC_DIRECT_API_URL || "/api/v1";
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
 
+export class ApiError extends Error {
+  status: number;
+  data: unknown;
+  blockedUntil?: string;
+
+  constructor(message: string, status: number, data: unknown = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+    if (data && typeof data === "object") {
+      const payload = data as Record<string, unknown>;
+      const blockedUntil = payload.bloqueado_hasta || payload.blockedUntil;
+      if (typeof blockedUntil === "string") {
+        this.blockedUntil = blockedUntil;
+      }
+    }
+  }
+}
+
 // Max upload size (bytes). Can be overridden at build time with NEXT_PUBLIC_MAX_UPLOAD_SIZE.
 export const MAX_UPLOAD_SIZE = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE) || 10 * 1024 * 1024; // 10MB
 
@@ -112,11 +132,11 @@ export async function apiRequest<T>(
       const detail = Array.isArray(error?.detail)
         ? error.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(". ")
         : error?.detail;
-      throw new Error(error?.message || detail || `Error ${response.status}`);
+      throw new ApiError(error?.message || detail || `Error ${response.status}`, response.status, error);
     }
 
     const text = await response.text().catch(() => "");
-    throw new Error(text.trim() || `Error ${response.status}`);
+    throw new ApiError(text.trim() || `Error ${response.status}`, response.status);
   }
 
   if (response.status === 204) {
@@ -203,4 +223,120 @@ export function logout(): void {
   removeToken();
   removeStoredAccount();
   removeSelectedProfile();
+}
+
+// ─── HU5: Content search with filters ───────────────────────────────────────
+
+export interface ContentSearchParams {
+  q?: string;
+  genero?: string;
+  tipo?: "pelicula" | "serie";
+  ordenar?: "anio_desc" | "anio_asc" | "titulo_asc";
+  perfil_id?: number;
+}
+
+export function buildContentSearchUrl(params: ContentSearchParams): string {
+  const query = new URLSearchParams();
+  if (params.q) query.set("q", params.q);
+  if (params.genero) query.set("genero", params.genero);
+  if (params.tipo) query.set("tipo", params.tipo);
+  if (params.ordenar) query.set("ordenar", params.ordenar);
+  if (params.perfil_id) query.set("perfil_id", String(params.perfil_id));
+  const qs = query.toString();
+  return qs ? `/contenidos?${qs}` : "/contenidos";
+}
+
+// ─── HU6: View progress ──────────────────────────────────────────────────────
+
+export interface ReportVistaPayload {
+  contenido_id?: number;
+  episodio_id?: number;
+  segundos_vistos: number;
+  terminado?: boolean;
+}
+
+export async function reportarVista(perfilId: number, payload: ReportVistaPayload): Promise<void> {
+  await apiRequest(`/perfiles/${perfilId}/vistas`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// ─── HU9: Calificaciones ─────────────────────────────────────────────────────
+
+export interface Calificacion {
+  id: number;
+  perfil_id: number;
+  contenido_id: number;
+  puntaje: number;
+}
+
+export async function getCalificacion(perfilId: number, contenidoId: number): Promise<Calificacion | null> {
+  try {
+    return await apiRequest<Calificacion>(`/perfiles/${perfilId}/calificaciones/${contenidoId}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function setCalificacion(perfilId: number, contenidoId: number, puntaje: number): Promise<Calificacion> {
+  return await apiRequest<Calificacion>(`/perfiles/${perfilId}/calificaciones`, {
+    method: "POST",
+    body: JSON.stringify({ contenido_id: contenidoId, puntaje }),
+  });
+}
+
+// ─── HU10: Recomendaciones ───────────────────────────────────────────────────
+
+export async function getRecomendaciones(perfilId: number): Promise<import("@/lib/types").Contenido[]> {
+  return await apiRequest<import("@/lib/types").Contenido[]>(`/perfiles/${perfilId}/recomendaciones`);
+}
+
+export async function getTopContenidos(genero?: string): Promise<import("@/lib/types").Contenido[]> {
+  const path = genero ? `/contenidos/top?genero=${encodeURIComponent(genero)}` : "/contenidos/top";
+  return await apiRequest<import("@/lib/types").Contenido[]>(path);
+}
+
+// ─── HU11: Control parental PIN ──────────────────────────────────────────────
+
+export async function desbloquearPerfil(perfilId: number, pin: string): Promise<{ success: boolean }> {
+  await apiRequest(`/perfiles/${perfilId}/desbloquear`, {
+    method: "POST",
+    body: JSON.stringify({ pin }),
+  });
+  return { success: true };
+}
+
+export async function setPinCuenta(cuentaId: number, pin: string): Promise<void> {
+  await apiRequest(`/cuentas/${cuentaId}/pin`, {
+    method: "PUT",
+    body: JSON.stringify({ pin }),
+  });
+}
+
+export async function getCuentaInfo(cuentaId: number): Promise<{ has_pin: boolean; plan: string }> {
+  return await apiRequest<{ has_pin: boolean; plan: string }>(`/cuentas/${cuentaId}`);
+}
+
+// ─── HU14: Reporte de visualizacion ──────────────────────────────────────────
+
+export interface ReporteVisualizacionItem {
+  contenido_id: number;
+  titulo: string;
+  tipo: "pelicula" | "serie";
+  minutos_vistos: number;
+  generos: string[];
+}
+
+export interface ReporteVisualizacion {
+  anio: number;
+  mes: number;
+  total_minutos: number;
+  total_contenidos: number;
+  por_genero: Record<string, number>;
+  contenidos: ReporteVisualizacionItem[];
+}
+
+export async function getReporteVisualizacion(anio: number, mes: number): Promise<ReporteVisualizacion> {
+  return await apiRequest<ReporteVisualizacion>(`/reportes/visualizacion?anio=${anio}&mes=${mes}`);
 }

@@ -1,9 +1,15 @@
+from datetime import datetime, timedelta
+
 from sqlalchemy.orm import Session
 
 from src.config import settings
 from src.dtos import AdminLoginDTO, AuthAccountDTO, LoginDTO, PerfilAuthDTO, PerfilAuthResponseDTO, TokenDTO
 from src.repositories import CuentaRepository, PerfilRepository
-from src.utils import UnauthorizedError, create_access_token, verify_password
+from src.utils import LockedError, UnauthorizedError, create_access_token, verify_password
+
+
+MAX_PIN_ATTEMPTS = 3
+PIN_LOCK_MINUTES = 15
 
 
 class AuthService:
@@ -85,8 +91,43 @@ class AuthService:
         if not perfil or perfil.cuenta_id != cuenta_id:
             raise UnauthorizedError("Perfil no autorizado")
 
-        if perfil.pin and (dto.pin is None or not verify_password(dto.pin, perfil.pin)):
-            raise UnauthorizedError("PIN invalido")
+        if perfil.pin:
+            now = datetime.utcnow()
+            if perfil.pin_bloqueado_hasta and perfil.pin_bloqueado_hasta > now:
+                raise LockedError(
+                    "Perfil bloqueado por demasiados intentos fallidos",
+                    bloqueado_hasta=perfil.pin_bloqueado_hasta.isoformat() + "Z",
+                )
+            if perfil.pin_bloqueado_hasta and perfil.pin_bloqueado_hasta <= now:
+                perfil = self.perfil_repo.update(
+                    perfil.id,
+                    pin_intentos_fallidos=0,
+                    pin_bloqueado_hasta=None,
+                ) or perfil
+
+            if dto.pin is None or not verify_password(dto.pin, perfil.pin):
+                failed_attempts = int(perfil.pin_intentos_fallidos or 0) + 1
+                fields: dict[str, object] = {"pin_intentos_fallidos": failed_attempts}
+
+                if failed_attempts >= MAX_PIN_ATTEMPTS:
+                    blocked_until = now + timedelta(minutes=PIN_LOCK_MINUTES)
+                    fields["pin_bloqueado_hasta"] = blocked_until
+                    self.perfil_repo.update(perfil.id, **fields)
+                    raise LockedError(
+                        "Perfil bloqueado por demasiados intentos fallidos",
+                        bloqueado_hasta=blocked_until.isoformat() + "Z",
+                    )
+
+                self.perfil_repo.update(perfil.id, **fields)
+                remaining = MAX_PIN_ATTEMPTS - failed_attempts
+                raise UnauthorizedError(f"PIN invalido. Intentos restantes: {remaining}")
+
+            if perfil.pin_intentos_fallidos or perfil.pin_bloqueado_hasta:
+                self.perfil_repo.update(
+                    perfil.id,
+                    pin_intentos_fallidos=0,
+                    pin_bloqueado_hasta=None,
+                )
 
         return PerfilAuthResponseDTO(
             message="Perfil autorizado",

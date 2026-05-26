@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Crown, Loader2, LogOut, Menu, Plus, Settings, User, X } from "lucide-react";
+import { Check, Crown, Loader2, Lock, LogOut, Menu, Plus, Settings, X } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
+import { PinModal } from "./PinModal";
+import { ProfileAvatar } from "./ProfileAvatar";
 import { ProfileCreateScreen } from "./ProfileCreateScreen";
-import { apiRequest, getAssetUrl, getSelectedProfile, logout, setSelectedProfile, MAX_UPLOAD_SIZE } from "@/lib/api";
+import { apiRequest, desbloquearPerfil, getAssetUrl, getSelectedProfile, logout, setSelectedProfile, MAX_UPLOAD_SIZE } from "@/lib/api";
 import type { AuthAccount, Profile } from "@/lib/types";
 
 interface HeaderProps {
@@ -34,13 +36,10 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedProfile, setSelectedProfileState] = useState(getSelectedProfile());
   const [pinProfile, setPinProfile] = useState<Profile | null>(null);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const currentProfile = profiles.find((profile) => profile.id === selectedProfile?.id) || selectedProfile;
   const canCreateProfile = profiles.length < planLimits[account.plan || ""] || !account.plan;
@@ -70,8 +69,6 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
     if (profile.id === selectedProfile?.id) return;
     if (profile.has_pin) {
       setPinProfile(profile);
-      setPin("");
-      setPinError(null);
       return;
     }
     selectProfileLocally(profile);
@@ -79,24 +76,27 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
     onProfileChanged();
   };
 
-  const submitPin = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!pinProfile) return;
-    setPinError(null);
-    setLoading(true);
+  const handlePinSubmit = async (pin: string): Promise<{ success: boolean; error?: string; blockedUntil?: string }> => {
+    if (!pinProfile) {
+      return { success: false, error: "No hay perfil seleccionado" };
+    }
+
     try {
-      await apiRequest(`/auth/perfiles/${pinProfile.id}`, {
-        method: "POST",
-        body: JSON.stringify({ pin: pin || null }),
-      });
+      await desbloquearPerfil(pinProfile.id, pin);
       selectProfileLocally(pinProfile);
       setPinProfile(null);
       setProfileMenuOpen(false);
       onProfileChanged();
+      return { success: true };
     } catch (err) {
-      setPinError(err instanceof Error ? err.message : "PIN invalido");
-    } finally {
-      setLoading(false);
+      const blockedUntil = err instanceof Error && "blockedUntil" in err
+        ? (err as { blockedUntil?: string }).blockedUntil
+        : undefined;
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "PIN invalido",
+        blockedUntil,
+      };
     }
   };
 
@@ -218,24 +218,11 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
       </div>
 
       {pinProfile && (
-        <Modal title={`PIN de ${pinProfile.nombre}`} onClose={() => setPinProfile(null)}>
-          <form onSubmit={submitPin} className="grid gap-3">
-            <input
-              value={pin}
-              onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
-              className="admin-input"
-              placeholder="PIN de 4 digitos"
-              inputMode="numeric"
-              maxLength={4}
-              autoFocus
-            />
-            {pinError && <p className="text-sm text-primary">{pinError}</p>}
-            <button className="admin-button justify-center" disabled={loading}>
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-              Entrar
-            </button>
-          </form>
-        </Modal>
+        <PinModal
+          profileName={pinProfile.nombre}
+          onSubmit={handlePinSubmit}
+          onCancel={() => setPinProfile(null)}
+        />
       )}
 
       {createOpen && (
@@ -314,6 +301,7 @@ function ProfileMenu({
           >
             <ProfileAvatar profile={profile} size="sm" />
             <span className="min-w-0 flex-1 truncate text-sm text-foreground">{profile.nombre}</span>
+            {profile.has_pin && <Lock size={14} className="text-muted-foreground" />}
             {profile.id === selectedProfileId && <Check size={16} className="text-primary" />}
           </button>
         ))}
@@ -598,18 +586,3 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   );
 }
 
-function ProfileAvatar({ profile, size }: { profile?: { nombre: string; avatar?: string | null } | null; size: "sm" | "lg" }) {
-  const className = size === "sm" ? "h-8 w-8 text-sm" : "h-24 w-24 text-3xl";
-  const avatarUrl = getAssetUrl(profile?.avatar);
-  return (
-    <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded bg-secondary font-bold text-foreground ${className}`}>
-      {avatarUrl ? (
-        <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-      ) : profile?.nombre ? (
-        profile.nombre.charAt(0).toUpperCase()
-      ) : (
-        <User size={18} />
-      )}
-    </span>
-  );
-}
