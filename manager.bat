@@ -21,6 +21,7 @@ echo 10. Iniciar tunel de Cloudflare
 echo 11. Ver estado/logs del tunel
 echo 12. Detener tunel de Cloudflare
 echo 13. Actualizar token de Cloudflare
+echo 14. Actualizar desde Git y reiniciar
 echo 0. Salir
 echo.
 set /p option=Elegi una opcion: 
@@ -38,6 +39,7 @@ if "%option%"=="10" goto start_tunnel
 if "%option%"=="11" goto tunnel_logs
 if "%option%"=="12" goto stop_tunnel
 if "%option%"=="13" goto update_tunnel_token
+if "%option%"=="14" goto update_from_git
 if "%option%"=="0" goto end
 goto menu
 
@@ -201,7 +203,7 @@ docker logs titoflix-cloudflared-tunnel 2>&1 | findstr /C:"Invalid tunnel secret
 if not errorlevel 1 (
     echo.
     echo Cloudflare rechazo el token: Invalid tunnel secret.
-    echo Usa la opcion 14 para pegar el token nuevo desde Add replica.
+    echo Usa la opcion 13 para pegar el token nuevo desde Add replica.
 )
 pause
 goto menu
@@ -235,6 +237,18 @@ if errorlevel 1 (
 powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\set-cloudflare-token.ps1"
 pause
 goto menu
+
+:update_from_git
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\update-from-git.ps1"
+if "%ERRORLEVEL%"=="2" (
+    pause
+    goto menu
+)
+if errorlevel 1 (
+    pause
+    goto menu
+)
+goto rebuild
 
 :ensure_env
 powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\ensure-env.ps1"
