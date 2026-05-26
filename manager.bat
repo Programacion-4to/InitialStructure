@@ -22,6 +22,7 @@ echo 11. Ver estado/logs del tunel
 echo 12. Detener tunel de Cloudflare
 echo 13. Actualizar token de Cloudflare
 echo 14. Actualizar desde Git y reiniciar
+echo 15. Auto-actualizar desde Git
 echo 0. Salir
 echo.
 set /p option=Elegi una opcion: 
@@ -40,6 +41,7 @@ if "%option%"=="11" goto tunnel_logs
 if "%option%"=="12" goto stop_tunnel
 if "%option%"=="13" goto update_tunnel_token
 if "%option%"=="14" goto update_from_git
+if "%option%"=="15" goto auto_update_from_git
 if "%option%"=="0" goto end
 goto menu
 
@@ -249,6 +251,11 @@ if errorlevel 1 (
     goto menu
 )
 goto rebuild
+
+:auto_update_from_git
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\auto-update.ps1"
+pause
+goto menu
 
 :ensure_env
 powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\ensure-env.ps1"
