@@ -20,7 +20,7 @@ echo 9. Resetear tablas de Postgres y buckets de MinIO
 echo 10. Iniciar tunel de Cloudflare
 echo 11. Ver estado/logs del tunel
 echo 12. Detener tunel de Cloudflare
-echo 13. Reconstruir frontend sin cache
+echo 13. Actualizar token de Cloudflare
 echo 0. Salir
 echo.
 set /p option=Elegi una opcion: 
@@ -37,7 +37,7 @@ if "%option%"=="9" goto reset_db
 if "%option%"=="10" goto start_tunnel
 if "%option%"=="11" goto tunnel_logs
 if "%option%"=="12" goto stop_tunnel
-if "%option%"=="13" goto rebuild_frontend
+if "%option%"=="13" goto update_tunnel_token
 if "%option%"=="0" goto end
 goto menu
 
@@ -134,12 +134,7 @@ if errorlevel 1 goto rebuild_failed
 pause
 goto menu
 
-:rebuild_frontend
-call :ensure_env
-if errorlevel 1 (
-    pause
-    goto menu
-)
+
 call :write_host_ip
 call :check_docker
 if errorlevel 1 (
@@ -197,11 +192,17 @@ if errorlevel 1 (
     goto menu
 )
 docker rm -f titoflix-cloudflared-tunnel >nul 2>nul
-docker run -d --name titoflix-cloudflared-tunnel --restart unless-stopped cloudflare/cloudflared:latest tunnel --no-autoupdate run --token "%CLOUDFLARE_TUNNEL_TOKEN%"
+docker run -d --name titoflix-cloudflared-tunnel --restart unless-stopped cloudflare/cloudflared:latest tunnel --no-autoupdate --protocol http2 run --token "%CLOUDFLARE_TUNNEL_TOKEN%"
 echo.
 echo Espera unos segundos. El conector deberia aparecer como Healthy en Cloudflare Zero Trust.
 timeout /t 6 /nobreak >nul
 docker logs titoflix-cloudflared-tunnel
+docker logs titoflix-cloudflared-tunnel 2>&1 | findstr /C:"Invalid tunnel secret" >nul
+if not errorlevel 1 (
+    echo.
+    echo Cloudflare rechazo el token: Invalid tunnel secret.
+    echo Usa la opcion 14 para pegar el token nuevo desde Add replica.
+)
 pause
 goto menu
 
@@ -225,10 +226,19 @@ docker rm -f titoflix-cloudflared-tunnel
 pause
 goto menu
 
+:update_tunnel_token
+call :ensure_env
+if errorlevel 1 (
+    pause
+    goto menu
+)
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\set-cloudflare-token.ps1"
+pause
+goto menu
+
 :ensure_env
-powershell -NoProfile -ExecutionPolicy Bypass -Command "if (!(Test-Path '.env') -or -not (Select-String -Path '.env' -Pattern '^DATABASE_URL=' -Quiet)) { if (Test-Path '.env.example') { Copy-Item '.env.example' '.env' -Force; Write-Host 'Se creo/actualizo .env desde .env.example porque faltaban variables base.' } else { Write-Error 'No se encontro .env.example para crear .env.'; exit 1 } }"
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\ensure-env.ps1"
 if errorlevel 1 exit /b 1
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$path='.env'; $values=@{NEXT_PUBLIC_API_URL='/api/v1'; NEXT_PUBLIC_DIRECT_API_URL='/api/v1'; NEXT_PUBLIC_BACKEND_URL=''}; $lines=@(); if (Test-Path $path) { $lines=Get-Content $path }; foreach ($key in $values.Keys) { $line=$key + '=' + $values[$key]; if ($lines -match ('^' + [regex]::Escape($key) + '=')) { $lines=$lines -replace ('^' + [regex]::Escape($key) + '=.*'), $line } else { $lines += $line } }; if (-not ($lines -match '^CLOUDFLARE_TUNNEL_TOKEN=')) { $lines += ''; $lines += '# Cloudflare Tunnel'; $lines += 'CLOUDFLARE_TUNNEL_TOKEN=' }; Set-Content -Path $path -Value $lines"
 goto :eof
 
 :check_docker

@@ -8,14 +8,14 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     APP_NAME: str = "Titoflix API"              # Nombre de la aplicación
-    ENVIRONMENT: str = "development"            # Entorno (development, production, etc.)
+    ENVIRONMENT: str = "production"            # Entorno (development, production, etc.)
 
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/titoflix"  # URL de conexión
 
     HOST: str = "127.0.0.1"                  # Host local donde escucha Uvicorn
     PORT: int = 8000                         # Puerto donde corre la app
 
-    JWT_SECRET: str = "cambiame-en-produccion"   # Clave secreta para firmar tokens JWT
+    JWT_SECRET: str = "cambiame-en-produccion"   # Se sobrescribe desde variables de entorno o backend/.env
     JWT_ALGORITHM: str = "HS256"                # Algoritmo de encriptación para JWT
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60       # Tiempo de expiración del token (en minutos)
     S3_ENDPOINT_URL: str = "http://localhost:9000"
