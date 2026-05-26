@@ -1,4 +1,4 @@
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session, aliased
 
 from src.db import Calificacion, Contenido, Descarga, Episodio, Genero, Perfil, Temporada, VideoVariant, Vista
@@ -23,6 +23,16 @@ class GeneroRepository:
 
     def list_all(self) -> list[Genero]:
         return self.db.query(Genero).order_by(Genero.nombre).all()
+
+    def update(self, genero_id: int, nombre: str) -> Genero | None:
+        genero = self.find_by_id(genero_id)
+        if not genero:
+            return None
+
+        genero.nombre = nombre
+        self.db.commit()
+        self.db.refresh(genero)
+        return genero
 
     def delete(self, genero_id: int) -> bool:
         genero = self.find_by_id(genero_id)
@@ -161,8 +171,8 @@ class ContenidoRepository:
             .order_by(Vista.fecha.desc())
             .all()
         )
-        watched_ids: set[int] = set()
-        genre_ids: set[int] = set()
+        finished_ids: set[int] = set()
+        genre_scores: dict[int, int] = {}
 
         for vista in vistas:
             contenido = vista.contenido
@@ -170,20 +180,30 @@ class ContenidoRepository:
                 contenido = vista.episodio.temporada.contenido
             if not contenido:
                 continue
-            watched_ids.add(contenido.id)
-            genre_ids.update(genero.id for genero in contenido.generos)
+            if vista.terminado:
+                finished_ids.add(contenido.id)
+            seconds = int(vista.segundos_vistos or 0)
+            for genero in contenido.generos:
+                genre_scores[genero.id] = genre_scores.get(genero.id, 0) + seconds
 
         query = self.db.query(Contenido)
         if only_atp:
             query = query.filter(Contenido.clasificacion_edad == "ATP")
 
-        if genre_ids:
-            query = query.join(Contenido.generos).filter(Genero.id.in_(genre_ids))
-            if watched_ids:
-                query = query.filter(~Contenido.id.in_(watched_ids))
+        if finished_ids:
+            query = query.filter(~Contenido.id.in_(finished_ids))
+
+        if genre_scores:
+            genre_score = case(
+                genre_scores,
+                value=Genero.id,
+                else_=0,
+            )
             return (
-                query.distinct()
-                .order_by(Contenido.titulo.asc())
+                query.join(Contenido.generos)
+                .filter(Genero.id.in_(list(genre_scores.keys())))
+                .group_by(Contenido.id)
+                .order_by(func.max(genre_score).desc(), Contenido.titulo.asc())
                 .limit(limit)
                 .all()
             )

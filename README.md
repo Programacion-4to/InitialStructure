@@ -114,9 +114,14 @@ DELETE /api/v1/cuentas/perfiles/{id}
 
 ```http
 POST /api/v1/generos
+GET /api/v1/generos/{id}
+PUT /api/v1/generos/{id}
+DELETE /api/v1/generos/{id}
 POST /api/v1/contenidos
 POST /api/v1/temporadas
+GET /api/v1/temporadas/{id}
 POST /api/v1/episodios
+GET /api/v1/episodios/{id}
 POST /api/v1/contenidos/{id}/validar-publicacion
 ```
 
@@ -198,6 +203,8 @@ GET /api/v1/perfiles/{id}/recomendaciones
 GET /api/v1/contenidos/top
 GET /api/v1/contenidos/top?genero=drama
 ```
+
+Las recomendaciones se ordenan segun los generos mas vistos por el perfil, ponderando los segundos vistos, y excluyen contenidos ya terminados.
 
 ### HU11 - Control parental con PIN
 

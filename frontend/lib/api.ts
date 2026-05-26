@@ -81,32 +81,34 @@ export async function apiRequest<T>(
     (headers as Record<string, string>)["Content-Type"] = "application/json";
   }
 
-  // Client-side check to avoid sending bodies larger than MAX_UPLOAD_SIZE.
+  // Client-side check to avoid sending large non-video uploads.
   if (hasBody) {
     try {
-      let bodySize = 0;
+      let limitedBodySize = 0;
       if (isFormData && typeof FormData !== "undefined") {
         const fd = options.body as FormData;
         for (const entry of fd.entries()) {
-          const value = entry[1] as any;
+          const [fieldName, value] = entry;
           if (typeof File !== "undefined" && value instanceof File) {
-            bodySize += value.size || 0;
+            if (fieldName !== "video") {
+              limitedBodySize += value.size || 0;
+            }
           } else if (typeof value === "string") {
-            bodySize += new Blob([value]).size;
+            limitedBodySize += new Blob([value]).size;
           }
         }
       } else if (typeof options.body === "string") {
-        bodySize = new Blob([options.body]).size;
+        limitedBodySize = new Blob([options.body]).size;
       } else if (typeof options.body === "object") {
         // Fallback for objects that weren't stringified by the caller.
         try {
-          const text = JSON.stringify(options.body as any);
-          bodySize = new Blob([text]).size;
+          const text = JSON.stringify(options.body);
+          limitedBodySize = new Blob([text]).size;
         } catch {}
       }
 
-      if (bodySize > MAX_UPLOAD_SIZE) {
-        const actualMB = Math.round((bodySize / 1024 / 1024) * 10) / 10;
+      if (limitedBodySize > MAX_UPLOAD_SIZE) {
+        const actualMB = Math.round((limitedBodySize / 1024 / 1024) * 10) / 10;
         const allowedMB = Math.round((MAX_UPLOAD_SIZE / 1024 / 1024) * 10) / 10;
         throw new Error(`El archivo es demasiado grande (${actualMB}MB). Tamaño máximo permitido: ${allowedMB}MB.`);
       }

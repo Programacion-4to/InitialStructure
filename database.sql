@@ -130,50 +130,56 @@ CREATE TABLE descargas (
     )
 );
 
-INSERT INTO cuentas (id, email, password_hash, plan, is_admin) VALUES
-(1, 'admin@titoflix.local', 'hash-admin', 'premium', TRUE),
-(2, 'ana@mail.com', 'hash-ana', 'premium', FALSE),
-(3, 'bruno@mail.com', 'hash-bruno', 'estandar', FALSE),
-(4, 'carla@mail.com', 'hash-carla', 'basico', FALSE),
-(5, 'diego@mail.com', 'hash-diego', 'premium', FALSE);
+INSERT INTO cuentas (email, password_hash, plan, is_admin) VALUES
+('admin@titoflix.local', 'hash-admin', 'premium', TRUE),
+('ana@mail.com', 'hash-ana', 'premium', FALSE),
+('bruno@mail.com', 'hash-bruno', 'estandar', FALSE),
+('carla@mail.com', 'hash-carla', 'basico', FALSE),
+('diego@mail.com', 'hash-diego', 'premium', FALSE);
 
-INSERT INTO perfiles (id, cuenta_id, nombre, es_infantil) VALUES
-(1, 2, 'Ana', FALSE),
-(2, 2, 'Peques', TRUE),
-(3, 3, 'Bruno', FALSE),
-(4, 4, 'Carla', FALSE),
-(5, 5, 'Diego', FALSE);
+INSERT INTO perfiles (cuenta_id, nombre, es_infantil) VALUES
+(2, 'Ana', FALSE),
+(2, 'Juan', FALSE),
+(2, 'Peques', TRUE),
+(3, 'Bruno', FALSE),
+(3, 'Sofia', TRUE),
+(4, 'Carla', FALSE),
+(5, 'Diego', FALSE);
 
-INSERT INTO generos (id, nombre) VALUES
-(1, 'accion'),
-(2, 'drama'),
-(3, 'comedia'),
-(4, 'documental'),
-(5, 'infantil');
+INSERT INTO generos (nombre) VALUES
+('accion'),
+('drama'),
+('comedia'),
+('documental'),
+('infantil');
 
-INSERT INTO contenidos (id, titulo, tipo, anio, descripcion, duracion_min, clasificacion_edad) VALUES
-(1, 'Mision Sur', 'pelicula', 2025, 'Pelicula de accion.', 110, '+13'),
-(2, 'Risas en Casa', 'pelicula', 2024, 'Comedia familiar.', 95, 'ATP'),
-(3, 'Planeta Azul', 'serie', 2026, 'Serie documental.', NULL, 'ATP'),
-(4, 'La Ciudad', 'serie', 2023, 'Drama urbano.', NULL, '+16'),
-(5, 'Aventuras Mini', 'serie', 2022, 'Serie infantil.', NULL, 'ATP');
+INSERT INTO contenidos (titulo, tipo, anio, descripcion, duracion_min, clasificacion_edad) VALUES
+('Mision Sur', 'pelicula', 2025, 'Pelicula de accion.', 110, '+13'),
+('Risas en Casa', 'pelicula', 2024, 'Comedia familiar.', 95, 'ATP'),
+('Planeta Azul', 'serie', 2026, 'Serie documental.', NULL, 'ATP'),
+('La Ciudad', 'serie', 2023, 'Drama urbano.', NULL, '+16'),
+('Aventuras Mini', 'serie', 2022, 'Serie infantil.', NULL, 'ATP');
 
 INSERT INTO contenido_generos (contenido_id, genero_id) VALUES
-(1, 1), (2, 3), (3, 4), (4, 2), (5, 5);
+(1, 1), (1, 2) -- Mision Sur: accion, drama
+(2, 3), (2, 5) -- Risas en Casa: comedia, infantil
+(3, 4), (3, 5) -- Planeta Azul: documental, infantil
+(4, 1), (4, 2) -- La Ciudad: accion, drama
+(5, 3), (5, 5) -- Aventuras Mini: comedia, infantil;
 
-INSERT INTO temporadas (id, contenido_id, numero, anio) VALUES
-(1, 3, 1, 2026),
-(2, 3, 2, 2026),
-(3, 4, 1, 2023),
-(4, 5, 1, 2022),
-(5, 5, 2, 2023);
+INSERT INTO temporadas (contenido_id, numero, anio) VALUES
+(3, 1, 2026),
+(3, 2, 2026),
+(4, 1, 2023),
+(5, 1, 2022),
+(5, 2, 2023);
 
-INSERT INTO episodios (id, temporada_id, numero, titulo, duracion_min) VALUES
-(1, 1, 1, 'Oceanos', 45),
-(2, 1, 2, 'Bosques', 44),
-(3, 3, 1, 'Piloto', 50),
-(4, 4, 1, 'El mapa', 22),
-(5, 5, 1, 'La carrera', 24);
+INSERT INTO episodios (temporada_id, numero, titulo, duracion_min) VALUES
+(1, 1, 'Oceanos', 45),
+(1, 2, 'Bosques', 44),
+(3, 1, 'Piloto', 50),
+(4, 1, 'El mapa', 22),
+(5, 1, 'La carrera', 24);
 
 INSERT INTO video_variants (contenido_id, quality, video_storage_key, video_mime, video_size) VALUES
 (1, 'FHD', 'media/contenidos/1/fhd.mp4', 'video/mp4', 1000000),

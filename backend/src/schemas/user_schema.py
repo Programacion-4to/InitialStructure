@@ -56,3 +56,26 @@ class PerfilSchema(BaseModel):
     has_pin: bool = False
 
     model_config = {"from_attributes": True}     # Permite crear el schema desde objetos ORM (SQLAlchemy)
+
+
+class CuentaBaseSchema(BaseModel):
+    email: EmailStr
+    plan: PlanType
+    is_admin: bool = False
+
+
+CuentaCreateSchema = CreateCuentaSchema
+CuentaUpdateSchema = UpdateCuentaSchema
+CuentaReadSchema = CuentaSchema
+
+
+class PerfilBaseSchema(BaseModel):
+    cuenta_id: int | None = None
+    nombre: str = Field(min_length=1, max_length=50)
+    es_infantil: bool = False
+    avatar: str | None = None
+
+
+PerfilCreateSchema = CreatePerfilSchema
+PerfilUpdateSchema = UpdatePerfilSchema
+PerfilReadSchema = PerfilSchema

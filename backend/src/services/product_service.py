@@ -97,6 +97,26 @@ class GeneroService:
     def list_all(self) -> list[GeneroResponseDTO]:
         return to_genero_response_list(self.genero_repo.list_all())
 
+    def get_by_id(self, genero_id: int) -> GeneroResponseDTO:
+        genero = self.genero_repo.find_by_id(genero_id)
+        if not genero:
+            raise NotFoundError("Genero no encontrado")
+        return to_genero_response(genero)
+
+    def update(self, genero_id: int, nombre: str) -> GeneroResponseDTO:
+        nombre = nombre.strip()
+        if not nombre:
+            raise ConflictError("El nombre del genero es obligatorio")
+
+        existing = self.genero_repo.find_by_name(nombre)
+        if existing and existing.id != genero_id:
+            raise ConflictError("Ya existe un genero con ese nombre")
+
+        genero = self.genero_repo.update(genero_id, nombre)
+        if not genero:
+            raise NotFoundError("Genero no encontrado")
+        return to_genero_response(genero)
+
     def delete(self, genero_id: int) -> None:
         if not self.genero_repo.delete(genero_id):
             raise NotFoundError("Genero no encontrado")
@@ -440,6 +460,12 @@ class TemporadaService:
             for t in self.temporada_repo.list_by_contenido(contenido_id)
         ]
 
+    def get_by_id(self, temporada_id: int) -> TemporadaResponseDTO:
+        temporada = self.temporada_repo.find_by_id(temporada_id)
+        if not temporada:
+            raise NotFoundError("Temporada no encontrada")
+        return to_temporada_response(temporada)
+
     def update(self, temporada_id: int, dto: UpdateTemporadaDTO) -> TemporadaResponseDTO:
         fields = dto.model_dump(exclude_unset=True, exclude_none=True)
         temporada = self.temporada_repo.update(temporada_id, **fields)
@@ -616,6 +642,12 @@ class EpisodioService:
 
         if not self.episodio_repo.delete(episodio_id):
             raise NotFoundError("Episodio no encontrado")
+
+    def get_by_id(self, episodio_id: int) -> EpisodioResponseDTO:
+        episodio = self.episodio_repo.find_by_id(episodio_id)
+        if not episodio:
+            raise NotFoundError("Episodio no encontrado")
+        return to_episodio_response(episodio)
 
     def get_video_source(
         self,

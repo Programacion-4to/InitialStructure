@@ -184,6 +184,21 @@ def list_generos(db: Session = Depends(get_db)):
     return GeneroService(db).list_all()
 
 
+@router.get("/generos/{genero_id}", response_model=GeneroResponseDTO)
+def get_genero(genero_id: int, db: Session = Depends(get_db)):
+    return GeneroService(db).get_by_id(genero_id)
+
+
+@router.put("/generos/{genero_id}", response_model=GeneroResponseDTO)
+def update_genero(
+    genero_id: int,
+    nombre: str,
+    _admin: Cuenta = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return GeneroService(db).update(genero_id, nombre)
+
+
 @router.delete("/generos/{genero_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_genero(
     genero_id: int,
@@ -369,6 +384,11 @@ def list_temporadas(contenido_id: int, db: Session = Depends(get_db)):
     return TemporadaService(db).list_by_contenido(contenido_id)
 
 
+@router.get("/temporadas/{temporada_id}", response_model=TemporadaResponseDTO)
+def get_temporada(temporada_id: int, db: Session = Depends(get_db)):
+    return TemporadaService(db).get_by_id(temporada_id)
+
+
 @router.delete("/temporadas/{temporada_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_temporada(
     temporada_id: int,
@@ -414,6 +434,11 @@ def create_episodio(
 @router.get("/temporadas/{temporada_id}/episodios", response_model=list[EpisodioResponseDTO])
 def list_episodios(temporada_id: int, db: Session = Depends(get_db)):
     return EpisodioService(db).list_by_temporada(temporada_id)
+
+
+@router.get("/episodios/{episodio_id}", response_model=EpisodioResponseDTO)
+def get_episodio(episodio_id: int, db: Session = Depends(get_db)):
+    return EpisodioService(db).get_by_id(episodio_id)
 
 
 @router.get("/episodios/{episodio_id}/playback")

@@ -113,3 +113,83 @@ class CalificacionSchema(BaseModel):
     fecha: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class GeneroBaseSchema(BaseModel):
+    nombre: str = Field(min_length=1)
+
+
+GeneroCreateSchema = GeneroBaseSchema
+GeneroUpdateSchema = GeneroBaseSchema
+GeneroReadSchema = GeneroSchema
+
+
+class ContenidoBaseSchema(BaseModel):
+    titulo: str = Field(min_length=1)
+    tipo: TipoContenido
+    anio: int = Field(ge=1900)
+    descripcion: str | None = None
+    clasificacion_edad: ClasificacionEdad
+
+
+ContenidoCreateSchema = CreateContenidoSchema
+ContenidoUpdateSchema = UpdateContenidoSchema
+ContenidoReadSchema = ContenidoSchema
+
+
+class TemporadaBaseSchema(BaseModel):
+    contenido_id: int
+    numero: int = Field(ge=1)
+    anio: int = Field(ge=1900)
+
+
+TemporadaCreateSchema = CreateTemporadaSchema
+TemporadaUpdateSchema = UpdateTemporadaSchema
+
+
+class TemporadaReadSchema(TemporadaBaseSchema):
+    id: int
+
+    model_config = {"from_attributes": True}
+
+
+class EpisodioBaseSchema(BaseModel):
+    temporada_id: int
+    numero: int = Field(ge=1)
+    titulo: str = Field(min_length=1)
+
+
+EpisodioCreateSchema = CreateEpisodioSchema
+EpisodioUpdateSchema = UpdateEpisodioSchema
+
+
+class EpisodioReadSchema(EpisodioBaseSchema):
+    id: int
+    duracion_min: float
+
+    model_config = {"from_attributes": True}
+
+
+VistaBaseSchema = UpsertVistaSchema
+VistaCreateSchema = CreateVistaSchema
+VistaUpdateSchema = UpsertVistaSchema
+VistaReadSchema = VistaSchema
+
+CalificacionBaseSchema = UpsertCalificacionSchema
+CalificacionCreateSchema = CreateCalificacionSchema
+CalificacionUpdateSchema = UpsertCalificacionSchema
+CalificacionReadSchema = CalificacionSchema
+
+DescargaBaseSchema = CreateDescargaSchema
+DescargaCreateSchema = CreateDescargaSchema
+DescargaUpdateSchema = CreateDescargaSchema
+
+
+class DescargaReadSchema(CreateDescargaSchema):
+    id: int
+    perfil_id: int
+    fecha_descarga: datetime | None = None
+    vence_en: datetime
+    eliminada: bool
+
+    model_config = {"from_attributes": True}
