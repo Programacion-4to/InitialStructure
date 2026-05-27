@@ -1,21 +1,22 @@
 # Titoflix Frontend
 
-Frontend de Titoflix hecho con Next.js. Consume la API REST del backend y muestra login, perfiles, catalogo, reproduccion, Mi Lista, recomendaciones y consola admin.
+Frontend de Titoflix hecho con Next.js. Muestra login, seleccion y creacion de perfiles, catalogo, busqueda, Mi Lista, detalle de contenido, reproductor, continuar viendo y consola admin.
 
 ## Como correrlo
 
-### Con Docker, recomendado
+### Docker, recomendado
 
-Desde la raiz del proyecto:
-
-```powershell
-docker compose up -d --build frontend
-```
-
-En la practica conviene levantar todo el stack:
+Desde la raiz:
 
 ```powershell
 docker compose up -d --build
+```
+
+Solo frontend:
+
+```powershell
+docker compose build frontend
+docker compose up -d frontend
 ```
 
 ### Sin Docker
@@ -27,66 +28,93 @@ npm install
 npm run dev
 ```
 
+Para desarrollo local sin Docker, asegurarse de que el backend responda en la URL configurada.
+
 ## URLs
 
-Misma maquina:
+- Local: `http://localhost:3000`
+- LAN: `http://[IP_LOCAL]:3000`
+- Tunel Cloudflare: `https://titoflix.watch`
 
-- Frontend: `http://localhost:3000`
+La API se consume por defecto con rutas relativas:
 
-Desde otro dispositivo de la red:
+```text
+/api/v1
+```
 
-- Frontend: `http://[IP_LOCAL]:3000`
+Next.js reescribe esas llamadas hacia `INTERNAL_BACKEND_URL`.
 
-Con tunel publico apuntando al frontend:
+## Variables
 
-- Frontend: `[URL_DE_TUNEL]`
-- API: `[URL_DE_TUNEL]/api/v1`
-
-## Variables importantes
-
-El frontend usa estas variables en Docker/build:
-
-- `NEXT_PUBLIC_API_URL`: URL base usada por el navegador para llamar a la API.
-- `NEXT_PUBLIC_DIRECT_API_URL`: URL alternativa para llamadas directas si se necesita.
-- `NEXT_PUBLIC_BACKEND_URL`: prefijo para URLs de streaming devueltas por el backend.
-- `INTERNAL_BACKEND_URL`: URL interna usada por Next.js cuando hace proxy desde el contenedor.
-
-Configuracion recomendada para Docker/local:
+Configuracion recomendada para Docker y Cloudflare Tunnel:
 
 ```env
 NEXT_PUBLIC_API_URL=/api/v1
-NEXT_PUBLIC_DIRECT_API_URL=/api/v1
+NEXT_PUBLIC_DIRECT_API_URL=http://localhost:8000/api/v1
 NEXT_PUBLIC_BACKEND_URL=
 INTERNAL_BACKEND_URL=http://backend:8000
+NEXT_PUBLIC_MAX_UPLOAD_SIZE=10485760
 ```
 
-Si se prueba desde otro dispositivo con frontend directo por IP y sin proxy, puede usarse:
+Significado:
+
+- `NEXT_PUBLIC_API_URL`: base usada por el navegador para API normal.
+- `NEXT_PUBLIC_DIRECT_API_URL`: base alternativa para uploads grandes si se necesita evitar el proxy.
+- `NEXT_PUBLIC_BACKEND_URL`: prefijo para `stream_url`; vacio significa usar el mismo host.
+- `INTERNAL_BACKEND_URL`: destino interno del rewrite de Next.js.
+- `NEXT_PUBLIC_MAX_UPLOAD_SIZE`: limite cliente para imagenes/JSON; los videos no usan este limite.
+
+Para probar desde otro dispositivo sin proxy:
 
 ```env
 NEXT_PUBLIC_API_URL=http://[IP_LOCAL]:8000/api/v1
 NEXT_PUBLIC_BACKEND_URL=http://[IP_LOCAL]:8000
 ```
 
-Si se usa tunel, reemplazar por:
+## Funcionalidad
 
-```env
-NEXT_PUBLIC_API_URL=[URL_DE_TUNEL]/api/v1
-NEXT_PUBLIC_BACKEND_URL=[URL_DE_TUNEL]
+- Registro con seleccion de plan.
+- Login normal y acceso admin.
+- Perfiles con avatar, PIN y selector Adulto/Infantil.
+- Menu de perfiles con cambio de perfil, ajustes y mejora de plan.
+- Busqueda y filtros por texto, genero, tipo y orden.
+- Catalogo separado en inicio, peliculas, series y Mi Lista.
+- Detalle de contenido con calidad disponible segun plan.
+- Reproducir, continuar y reproducir desde cero.
+- Reproductor con reporte de progreso cada pocos segundos.
+- Calificacion y eliminacion de calificacion.
+- Consola admin para catalogo, reportes y permisos admin del admin principal.
+
+## Consola admin
+
+La ruta `/admin` solo permite cuentas con `is_admin=true`.
+
+El admin principal hardcodeado es la cuenta ID `1`. Solo esa cuenta ve la pestaña `Permisos`, donde puede activar o quitar permisos admin a otras cuentas. No puede quitarse admin a si misma.
+
+## Streaming
+
+El frontend pide `/playback` al backend, recibe un `stream_url` con token temporal y lo pasa al reproductor.
+
+Si `NEXT_PUBLIC_BACKEND_URL` esta vacio, el stream queda en el mismo dominio:
+
+```text
+/api/v1/contenidos/{id}/stream?token=...&quality=...
 ```
+
+Esto funciona con Docker y Cloudflare porque el frontend proxyea `/api/v1`.
 
 ## MinIO
 
-El usuario del frontend no deberia hablar directo con MinIO. La app pide assets y videos al backend, y el backend lee/escribe en MinIO por la red interna de Docker.
+El frontend no accede directo a MinIO. Las imagenes y videos pasan por el backend:
 
-La consola de MinIO queda para administracion:
+- Portadas, miniaturas y avatars: `/api/v1/assets/...`
+- Videos: `/api/v1/.../stream`
 
-- Host local: `http://localhost:9001`
-- LAN: `http://[IP_LOCAL]:9001`
+MinIO Console queda para administracion en `http://localhost:9001`.
 
-No conviene exponer MinIO por tunel salvo que sea una decision explicita de administracion.
+## Documentacion relacionada
 
-## Documentacion del proyecto
-
-- README general: `../README.md`
+- General: `../README.md`
+- Docker: `../DOCKER.md`
 - Backend: `../backend/README.md`
-- Modelo de datos / diagrama ER: `../docs/modelo-datos.md`
+- Modelo de datos: `../docs/modelo-datos.md`

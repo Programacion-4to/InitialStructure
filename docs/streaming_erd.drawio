@@ -1,89 +1,166 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" modified="2026-05-21T00:00:00.000Z" agent="ChatGPT" version="24.7.17">
-  <diagram id="streamingER" name="Page-1">
-    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+<mxfile host="app.diagrams.net" modified="2026-05-27T00:00:00.000Z" agent="Codex" version="24.7.17">
+  <diagram id="titoflix-erd" name="Titoflix ERD">
+    <mxGraphModel dx="1800" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
 
-        <mxCell id="2" value="CUENTAS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
-          <mxGeometry x="40" y="40" width="140" height="60" as="geometry"/>
+        <mxCell id="domain_users" value="USUARIOS, CUENTAS Y PERFILES" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;fontSize=16;align=left;verticalAlign=top;spacingTop=10;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="30" y="30" width="430" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="domain_products" value="CATALOGO, PRODUCTOS Y MEDIA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;fontSize=16;align=left;verticalAlign=top;spacingTop=10;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="520" y="30" width="760" height="1030" as="geometry"/>
+        </mxCell>
+        <mxCell id="domain_activity" value="INTERACCION DEL PERFIL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;fontSize=16;align=left;verticalAlign=top;spacingTop=10;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="30" width="410" height="1030" as="geometry"/>
         </mxCell>
 
-        <mxCell id="3" value="PERFILES" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
-          <mxGeometry x="260" y="40" width="140" height="60" as="geometry"/>
+        <mxCell id="cuentas" value="CUENTAS&#xa;--------------------&#xa;id PK&#xa;email UK&#xa;password_hash&#xa;plan: basico|estandar|premium&#xa;is_admin&#xa;fecha_alta" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#b7d7ff;strokeColor=#2f6eb3;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="70" y="100" width="340" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="perfiles" value="PERFILES&#xa;--------------------&#xa;id PK&#xa;cuenta_id FK&#xa;nombre&#xa;pin&#xa;pin_intentos_fallidos&#xa;pin_bloqueado_hasta&#xa;es_infantil&#xa;avatar" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d6eaff;strokeColor=#2f6eb3;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="70" y="380" width="340" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="user_rules" value="Reglas de usuario&#xa;--------------------&#xa;Admin principal: cuenta ID 1&#xa;Solo ID 1 administra permisos admin&#xa;PIN: 3 intentos fallidos = bloqueo 15 min&#xa;Infantil: solo contenido ATP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#edf5ff;strokeColor=#6c8ebf;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="70" y="700" width="340" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="plan_rules" value="Planes&#xa;--------------------&#xa;basico: 1 perfil, FHD, 0 descargas&#xa;estandar: 2 perfiles, QHD, 10 descargas&#xa;premium: 5 perfiles, 4K, 30 descargas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#edf5ff;strokeColor=#6c8ebf;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="70" y="900" width="340" height="130" as="geometry"/>
         </mxCell>
 
-        <mxCell id="4" value="CONTENIDOS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
-          <mxGeometry x="520" y="40" width="160" height="60" as="geometry"/>
+        <mxCell id="contenidos" value="CONTENIDOS&#xa;--------------------&#xa;id PK&#xa;titulo&#xa;tipo: pelicula|serie&#xa;anio&#xa;descripcion&#xa;duracion_min&#xa;clasificacion_edad&#xa;storage_folder_id&#xa;video_storage_key&#xa;video_mime / video_size&#xa;portada_url" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffd59b;strokeColor=#b36b00;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="90" width="300" height="270" as="geometry"/>
+        </mxCell>
+        <mxCell id="temporadas" value="TEMPORADAS&#xa;--------------------&#xa;id PK&#xa;contenido_id FK&#xa;numero&#xa;anio&#xa;storage_folder_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#b36b00;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="940" y="90" width="280" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="episodios" value="EPISODIOS&#xa;--------------------&#xa;id PK&#xa;temporada_id FK&#xa;numero&#xa;titulo&#xa;duracion_min&#xa;storage_folder_id&#xa;video_storage_key&#xa;video_mime / video_size&#xa;thumbnail_url" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0d9;strokeColor=#b85450;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="940" y="300" width="280" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="generos" value="GENEROS&#xa;--------------------&#xa;id PK&#xa;nombre UK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="450" width="300" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="contenido_generos" value="CONTENIDO_GENEROS&#xa;--------------------&#xa;contenido_id FK&#xa;genero_id FK&#xa;PK compuesta" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef7e8;strokeColor=#82b366;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="630" width="300" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="video_variants" value="VIDEO_VARIANTS&#xa;--------------------&#xa;id PK&#xa;contenido_id FK opcional&#xa;episodio_id FK opcional&#xa;quality: FHD|QHD|4K&#xa;video_storage_key&#xa;video_mime&#xa;video_size&#xa;CHECK: contenido o episodio, no ambos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4ddff;strokeColor=#9673a6;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="940" y="620" width="280" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="product_rules" value="Reglas de catalogo y media&#xa;--------------------&#xa;Pelicula: video directo obligatorio&#xa;Serie: temporadas y episodios&#xa;FFmpeg genera variantes disponibles&#xa;Playback valida perfil, plan y calidad&#xa;Stream usa token temporal + Range" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff6e8;strokeColor=#d79b00;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="850" width="660" height="170" as="geometry"/>
         </mxCell>
 
-        <mxCell id="5" value="TEMPORADAS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
-          <mxGeometry x="760" y="40" width="160" height="60" as="geometry"/>
+        <mxCell id="mi_lista" value="MI_LISTA&#xa;--------------------&#xa;perfil_id FK&#xa;contenido_id FK&#xa;fecha_agregada&#xa;PK (perfil_id, contenido_id)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e9d9f3;strokeColor=#9673a6;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="100" width="310" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="vistas" value="VISTAS&#xa;--------------------&#xa;id PK&#xa;perfil_id FK&#xa;contenido_id FK opcional&#xa;episodio_id FK opcional&#xa;fecha&#xa;segundos_vistos&#xa;terminado&#xa;CHECK: contenido o episodio, no ambos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e9d9f3;strokeColor=#9673a6;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="300" width="310" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="calificaciones" value="CALIFICACIONES&#xa;--------------------&#xa;id PK&#xa;perfil_id FK&#xa;contenido_id FK&#xa;puntaje 1..5&#xa;fecha&#xa;UNIQUE(perfil_id, contenido_id)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e9d9f3;strokeColor=#9673a6;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="590" width="310" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="descargas" value="DESCARGAS&#xa;--------------------&#xa;id PK&#xa;perfil_id FK&#xa;contenido_id FK opcional&#xa;episodio_id FK opcional&#xa;fecha_descarga&#xa;vence_en&#xa;eliminada&#xa;CHECK: contenido o episodio, no ambos" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e9d9f3;strokeColor=#9673a6;fontStyle=1;align=left;spacing=10;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="820" width="310" height="210" as="geometry"/>
         </mxCell>
 
-        <mxCell id="6" value="EPISODIOS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
-          <mxGeometry x="1000" y="40" width="160" height="60" as="geometry"/>
+        <mxCell id="edge_cuenta_perfil" value="1 : N" edge="1" parent="1" source="cuentas" target="perfiles" style="endArrow=block;html=1;rounded=0;strokeColor=#2f6eb3;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-
-        <mxCell id="7" value="VIDEO_VARIANTS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
-          <mxGeometry x="760" y="180" width="180" height="60" as="geometry"/>
+        <mxCell id="edge_contenido_temporada" value="serie 1 : N" edge="1" parent="1" source="contenidos" target="temporadas" style="endArrow=block;html=1;rounded=0;strokeColor=#b36b00;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-
-        <mxCell id="8" value="GENEROS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
-          <mxGeometry x="520" y="320" width="140" height="60" as="geometry"/>
+        <mxCell id="edge_temporada_episodio" value="1 : N" edge="1" parent="1" source="temporadas" target="episodios" style="endArrow=block;html=1;rounded=0;strokeColor=#b85450;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-
-        <mxCell id="9" value="CONTENIDO_GENEROS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="760" y="320" width="220" height="60" as="geometry"/>
+        <mxCell id="edge_contenido_cg" value="1 : N" edge="1" parent="1" source="contenidos" target="contenido_generos" style="endArrow=block;html=1;rounded=0;strokeColor=#82b366;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-
-        <mxCell id="10" value="VISTAS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="260" y="180" width="140" height="60" as="geometry"/>
+        <mxCell id="edge_genero_cg" value="1 : N" edge="1" parent="1" source="generos" target="contenido_generos" style="endArrow=block;html=1;rounded=0;strokeColor=#82b366;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-
-        <mxCell id="11" value="CALIFICACIONES" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="260" y="300" width="180" height="60" as="geometry"/>
+        <mxCell id="edge_contenido_variant" value="pelicula 1 : N" edge="1" parent="1" source="contenidos" target="video_variants" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry"/>
         </mxCell>
-
-        <mxCell id="12" value="DESCARGAS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="260" y="420" width="160" height="60" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="13" value="MI_LISTA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
-          <mxGeometry x="260" y="540" width="160" height="60" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="20" edge="1" parent="1" source="2" target="3" style="endArrow=block;html=1;rounded=0;">
+        <mxCell id="edge_episodio_variant" value="episodio 1 : N" edge="1" parent="1" source="episodios" target="video_variants" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
-        <mxCell id="21" edge="1" parent="1" source="3" target="10" style="endArrow=block;html=1;rounded=0;">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="edge_perfil_lista" value="1 : N" edge="1" parent="1" source="perfiles" target="mi_lista" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="460" y="430"/>
+              <mxPoint x="1340" y="170"/>
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <mxCell id="22" edge="1" parent="1" source="3" target="11" style="endArrow=block;html=1;rounded=0;">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="edge_contenido_lista" value="1 : N" edge="1" parent="1" source="contenidos" target="mi_lista" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1270" y="160"/>
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <mxCell id="23" edge="1" parent="1" source="3" target="12" style="endArrow=block;html=1;rounded=0;">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="edge_perfil_vistas" value="1 : N" edge="1" parent="1" source="perfiles" target="vistas" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="460" y="500"/>
+              <mxPoint x="1340" y="410"/>
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <mxCell id="24" edge="1" parent="1" source="3" target="13" style="endArrow=block;html=1;rounded=0;">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="edge_contenido_vistas" value="pelicula 1 : N" edge="1" parent="1" source="contenidos" target="vistas" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1280" y="390"/>
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <mxCell id="25" edge="1" parent="1" source="4" target="5" style="endArrow=block;html=1;rounded=0;">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="edge_episodio_vistas" value="episodio 1 : N" edge="1" parent="1" source="episodios" target="vistas" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1280" y="430"/>
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <mxCell id="26" edge="1" parent="1" source="5" target="6" style="endArrow=block;html=1;rounded=0;">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="edge_perfil_calificaciones" value="1 : N" edge="1" parent="1" source="perfiles" target="calificaciones" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="460" y="550"/>
+              <mxPoint x="1340" y="675"/>
+            </Array>
+          </mxGeometry>
         </mxCell>
-
-        <mxCell id="27" edge="1" parent="1" source="4" target="7" style="endArrow=block;html=1;rounded=0;">
-          <mxGeometry relative="1" as="geometry"/>
+        <mxCell id="edge_contenido_calificaciones" value="1 : N" edge="1" parent="1" source="contenidos" target="calificaciones" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1270" y="680"/>
+            </Array>
+          </mxGeometry>
         </mxCell>
-
+        <mxCell id="edge_perfil_descargas" value="1 : N" edge="1" parent="1" source="perfiles" target="descargas" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="460" y="590"/>
+              <mxPoint x="1340" y="920"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge_contenido_descargas" value="pelicula 1 : N" edge="1" parent="1" source="contenidos" target="descargas" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1300" y="900"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge_episodio_descargas" value="episodio 1 : N" edge="1" parent="1" source="episodios" target="descargas" style="endArrow=block;html=1;rounded=0;strokeColor=#9673a6;fontStyle=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1300" y="960"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
 </mxfile>

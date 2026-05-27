@@ -1,22 +1,27 @@
 # Titoflix con Docker
 
-Este proyecto corre con cuatro servicios separados:
+Este proyecto corre con Docker Compose y separa la app en servicios independientes.
 
-- `frontend`: aplicacion Next.js en `http://localhost:3000`
-- `backend`: API FastAPI en `http://localhost:8000`
-- `postgres`: base de datos PostgreSQL en `localhost:5432`
-- `minio`: storage compatible con S3 para videos, miniaturas, avatars y assets
+## Servicios
 
-La imagen del backend instala FFmpeg para detectar la resolucion de cada video subido y generar las variantes de calidad.
+- `frontend`: Next.js en `http://localhost:3000`. Tambien proxyea `/api/v1/*` al backend.
+- `backend`: FastAPI en `http://localhost:8000`.
+- `postgres`: PostgreSQL en `localhost:5432`.
+- `minio`: storage S3 compatible en `localhost:9000`.
+- `minio-init`: crea el bucket inicial.
+- `titoflix-cloudflared-tunnel`: contenedor opcional creado por `manager.bat` para Cloudflare Tunnel.
+
+El backend instala FFmpeg para detectar duracion/resolucion y generar variantes de video `FHD`, `QHD` y `4K`.
 
 ## Requisitos
 
 - Docker Desktop
 - Docker Compose v2
+- Windows PowerShell para usar `manager.bat` y scripts auxiliares
 
 ## Uso rapido
 
-En Windows ejecuta:
+En Windows:
 
 ```bat
 manager.bat
@@ -24,30 +29,25 @@ manager.bat
 
 Opciones principales:
 
-- `Iniciar servicios`: levanta todos los contenedores en segundo plano.
-- `Ver consola del frontend/backend/postgres/MinIO`: abre logs en vivo del servicio elegido.
-- `Detener servicios`: apaga los contenedores sin borrar volumenes.
-- `Reconstruir e iniciar`: reconstruye imagenes y vuelve a levantar el stack.
-- `Resetear tablas de Postgres y buckets de MinIO`: elimina y vuelve a crear las tablas desde el backend, y vacia/recrea el bucket de medios.
+- `1. Iniciar servicios`: levanta el stack.
+- `2. Ver estado`: muestra contenedores.
+- `3` a `6`: logs de frontend, backend, postgres o MinIO.
+- `7. Detener servicios`: apaga contenedores sin borrar volumenes.
+- `8. Reconstruir e iniciar`: rebuild completo.
+- `9. Resetear tablas de Postgres y buckets de MinIO`: borra base y archivos.
+- `10. Iniciar tunel de Cloudflare`: levanta servicios, espera frontend en `localhost:3000` y arranca el conector.
+- `11. Ver estado/logs del tunel`.
+- `12. Detener tunel de Cloudflare`.
+- `13. Actualizar token de Cloudflare`.
 
-Tambien podes usar Docker Compose directamente:
+Comandos equivalentes:
 
-```bash
+```powershell
 docker compose up -d --build
 docker compose ps
 docker compose logs -f backend
 docker compose down
 ```
-
-Para resetear solo las tablas de Postgres desde Docker:
-
-```bash
-docker compose exec backend python -c "from src.db import reset_database; reset_database()"
-```
-
-Ese comando no borra los archivos guardados en MinIO.
-
-La opcion `Resetear tablas de Postgres y buckets de MinIO` de `manager.bat` tambien ejecuta el cliente `mc` para borrar y recrear el bucket `titoflix-media`.
 
 ## URLs
 
@@ -58,17 +58,17 @@ La opcion `Resetear tablas de Postgres y buckets de MinIO` de `manager.bat` tamb
 - MinIO API S3: `http://localhost:9000`
 - MinIO Console: `http://localhost:9001`
 
-El frontend llama al backend directamente en `http://localhost:8000/api/v1/...` desde el navegador. Swagger esta disponible en `http://localhost:8000/docs`.
+En la configuracion default el navegador llama a la API con rutas relativas:
 
-Credenciales de MinIO:
+```text
+/api/v1 -> Next.js -> http://backend:8000/api/v1
+```
 
-- Usuario: `titoflix`
-- Password: `titoflix-secret`
-- Bucket: `titoflix-media`
+Esto permite que `https://titoflix.watch/api/v1` funcione cuando el tunel apunta al frontend.
 
 ## Variables importantes
 
-El `docker-compose.yml` ya define las variables necesarias para desarrollo local:
+El `.env` se crea desde `.env.example`.
 
 ```env
 DATABASE_URL=postgresql://postgres:postgres@postgres:5432/titoflix
@@ -79,26 +79,117 @@ S3_SECRET_KEY=titoflix-secret
 S3_BUCKET_NAME=titoflix-media
 S3_REGION=us-east-1
 S3_MEDIA_PREFIX=media
-INTERNAL_BACKEND_URL=http://localhost:8000
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+S3_ASSETS_PREFIX=assets
+INTERNAL_BACKEND_URL=http://backend:8000
+NEXT_PUBLIC_API_URL=/api/v1
+NEXT_PUBLIC_DIRECT_API_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_BACKEND_URL=
+CLOUDFLARE_TUNNEL_TOKEN=
 ```
 
-El backend crea las tablas al arrancar. PostgreSQL guarda datos en el volumen `postgres_data` y MinIO guarda archivos en `minio_data`.
+Credenciales MinIO default:
+
+- Usuario: `titoflix`
+- Password: `titoflix-secret`
+- Bucket: `titoflix-media`
+
+## Cloudflare Tunnel
+
+El tunel configurado en Cloudflare debe apuntar a:
+
+```text
+http://host.docker.internal:3000
+```
+
+No debe apuntar al backend si se quiere servir la app completa desde el mismo dominio. El frontend se encarga de proxyear `/api/v1`.
+
+Para arrancarlo:
+
+1. Cargar `CLOUDFLARE_TUNNEL_TOKEN` en `.env` o usar la opcion `13` del manager.
+2. Usar la opcion `10`.
+3. Revisar logs con opcion `11`.
+
+Si aparece Cloudflare 1033, el tunel esta activo pero no llega al origen. Verificar:
+
+```powershell
+docker compose ps
+Invoke-WebRequest -UseBasicParsing http://localhost:3000
+docker run --rm curlimages/curl:latest -sS -o /dev/null -w "%{http_code}\n" http://host.docker.internal:3000
+```
+
+Si el ultimo comando no devuelve `200`, Cloudflare tampoco podra llegar.
 
 ## Storage S3/MinIO
 
-Se elimino la integracion con Google Drive. Los videos se suben a MinIO usando la API S3 y se guardan en el bucket `titoflix-media`, bajo el prefijo `media`.
+Se usa MinIO en vez de Google Drive. El backend guarda:
 
-Cada pelicula y cada episodio tienen su propia carpeta en MinIO. Al subir un archivo, el backend lo toma como la calidad maxima disponible, detecta su resolucion y duracion con `ffprobe`, y genera con `ffmpeg` las variantes `FHD`, `QHD` y `4K` sin pedir la calidad ni la duracion en la pantalla de administracion. Si el archivo fuente no llega a una resolucion alta, esa variante se conserva en la maxima resolucion disponible en vez de hacer upscale.
+- videos y variantes bajo `media`
+- portadas, miniaturas y avatars bajo `assets`
 
-Los endpoints de playback siguen devolviendo `stream_url` y `mime_type`. La transmision del video pasa por el backend, que lee desde MinIO y respeta requests con header `Range` para reproduccion parcial.
+El usuario final no habla directo con MinIO. Assets y videos se sirven por el backend:
 
-## Borrar datos locales
+- Assets: `/api/v1/assets/{asset_path}`
+- Streams: `/api/v1/contenidos/{id}/stream?...`
+- Streams de episodios: `/api/v1/episodios/{id}/stream?...`
 
-Para apagar todo y borrar la base de datos y los archivos de MinIO:
+El backend respeta requests con header `Range`, necesario para reproduccion parcial en el navegador.
 
-```bash
+## Playback y calidades
+
+Al subir videos, FFmpeg genera variantes hasta la resolucion disponible. Las calidades permitidas por plan son:
+
+- `basico`: hasta `FHD`
+- `estandar`: hasta `QHD`
+- `premium`: hasta `4K`
+
+Los endpoints `/playback` eligen la mejor calidad permitida si no se pasa `quality`, y rechazan calidades superiores al plan.
+
+El endpoint `/stream` usa un token temporal de media generado por `/playback`. Ese token incluye recurso, accion y calidad.
+
+## Reset de datos
+
+Resetear tablas:
+
+```powershell
+docker compose exec backend python -c "from src.db import reset_database; reset_database()"
+```
+
+Resetear base y bucket desde el manager:
+
+```text
+9. Resetear tablas de Postgres y buckets de MinIO
+```
+
+Borrar volumenes manualmente:
+
+```powershell
 docker compose down -v
 ```
 
-Usalo con cuidado: elimina los volumenes `postgres_data` y `minio_data`.
+## Comandos utiles
+
+Reconstruir solo backend:
+
+```powershell
+docker compose build backend
+docker compose up -d backend
+```
+
+Reconstruir solo frontend:
+
+```powershell
+docker compose build frontend
+docker compose up -d frontend
+```
+
+Validar backend dentro del contenedor:
+
+```powershell
+docker compose exec backend python -m compileall src
+```
+
+Ver logs del tunel:
+
+```powershell
+docker logs -f titoflix-cloudflared-tunnel
+```

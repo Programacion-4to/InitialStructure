@@ -1,8 +1,8 @@
 # Modelo de Datos - Titoflix
 
-## Diagrama ER Simplificado
+Este documento resume el modelo relacional usado por el backend SQLAlchemy y el script `database.sql`.
 
-Este es el diagrama recomendado para reproducir en draw.io. Cada bloque es una tabla y cada linea indica la cardinalidad principal.
+## Diagrama ER Simplificado
 
 ```text
 [CUENTA] 1 -------- N [PERFIL]
@@ -10,116 +10,235 @@ Este es el diagrama recomendado para reproducir en draw.io. Cada bloque es una t
 [CONTENIDO] 1 ----- N [TEMPORADA] 1 ----- N [EPISODIO]
 
 [CONTENIDO] N ----- N [GENERO]
-    via tabla puente: CONTENIDO_GENEROS
+    via [CONTENIDO_GENEROS]
 
 [PERFIL] N -------- N [CONTENIDO]
-    via tabla puente: MI_LISTA
+    via [MI_LISTA]
 
 [PERFIL] 1 -------- N [VISTA]
-[VISTA] N -------- 0..1 [CONTENIDO]   (si es pelicula)
-[VISTA] N -------- 0..1 [EPISODIO]    (si es serie)
+[VISTA] N -------- 0..1 [CONTENIDO]   (pelicula)
+[VISTA] N -------- 0..1 [EPISODIO]    (serie)
 
 [PERFIL] 1 -------- N [CALIFICACION]
 [CALIFICACION] N -- 1 [CONTENIDO]
 
 [PERFIL] 1 -------- N [DESCARGA]
-[DESCARGA] N ------ 0..1 [CONTENIDO]  (si es pelicula)
-[DESCARGA] N ------ 0..1 [EPISODIO]   (si es serie)
+[DESCARGA] N ------ 0..1 [CONTENIDO]  (pelicula)
+[DESCARGA] N ------ 0..1 [EPISODIO]   (serie)
+
+[CONTENIDO] 1 ----- N [VIDEO_VARIANT]
+[EPISODIO]  1 ----- N [VIDEO_VARIANT]
 ```
 
-## Como Dibujarlo En Draw.io
+## Tablas Principales
 
-1. Crear una caja por tabla principal: `Cuenta`, `Perfil`, `Contenido`, `Temporada`, `Episodio`, `Genero`, `Vista`, `Calificacion`, `Descarga`.
-2. Dibujar las relaciones 1:N con una linea y etiquetas `1` y `N`.
-3. Para las relaciones N:M, dibujar `Contenido N:N Genero` y `Perfil N:N Contenido`.
-4. Si el profesor pide modelo relacional, agregar las cajas puente `contenido_generos` y `mi_lista`.
-5. Para `Vista` y `Descarga`, conectar con `Perfil` y luego con `Contenido` y `Episodio`, aclarando: `contenido_id o episodio_id, no ambos`.
-
-## Campos Principales
+### cuentas
 
 ```text
-CUENTA
-- id PK
-- email UK
-- password_hash
-- plan
-- is_admin
-- fecha_alta
-
-PERFIL
-- id PK
-- cuenta_id FK
-- nombre
-- es_infantil
-- avatar
-- pin
-- pin_intentos_fallidos
-- pin_bloqueado_hasta
-
-CONTENIDO
-- id PK
-- titulo
-- tipo: pelicula | serie
-- anio
-- descripcion
-- duracion_min
-- clasificacion_edad
-
-TEMPORADA
-- id PK
-- contenido_id FK
-- numero
-- anio
-
-EPISODIO
-- id PK
-- temporada_id FK
-- numero
-- titulo
-- duracion_min
-
-GENERO
-- id PK
-- nombre UK
-
-VISTA
-- id PK
-- perfil_id FK
-- contenido_id FK opcional
-- episodio_id FK opcional
-- fecha
-- segundos_vistos
-- terminado
-
-CALIFICACION
-- id PK
-- perfil_id FK
-- contenido_id FK
-- puntaje
-- fecha
-
-DESCARGA
-- id PK
-- perfil_id FK
-- contenido_id FK opcional
-- episodio_id FK opcional
-- fecha_descarga
-- vence_en
-- eliminada
+id PK
+email UK
+password_hash
+plan
+is_admin
+fecha_alta
 ```
+
+Reglas:
+
+- `plan` debe ser `basico`, `estandar` o `premium`.
+- la cuenta admin principal se mantiene con ID `1`.
+- solo el admin principal puede cambiar permisos admin de otras cuentas.
+
+### perfiles
+
+```text
+id PK
+cuenta_id FK -> cuentas.id
+nombre
+pin
+pin_intentos_fallidos
+pin_bloqueado_hasta
+es_infantil
+avatar
+```
+
+Reglas:
+
+- `nombre` es unico por cuenta.
+- `pin` es opcional y se guarda hasheado.
+- tras 3 intentos fallidos de PIN, el perfil se bloquea 15 minutos.
+- `es_infantil=true` limita el acceso a contenido `ATP`.
+- `avatar` guarda una key de MinIO o URL/data URL durante el flujo de carga.
+
+### contenidos
+
+```text
+id PK
+titulo
+tipo
+anio
+descripcion
+duracion_min
+clasificacion_edad
+storage_folder_id
+video_storage_key
+video_mime
+video_size
+portada_url
+```
+
+Reglas:
+
+- `tipo` debe ser `pelicula` o `serie`.
+- una pelicula debe tener video y duracion directa.
+- una serie no lleva video directo; sus videos estan en episodios.
+- `clasificacion_edad` usa `ATP`, `+13`, `+16`, `+18`.
+- `portada_url` apunta a un asset de MinIO.
+
+### temporadas
+
+```text
+id PK
+contenido_id FK -> contenidos.id
+numero
+anio
+storage_folder_id
+```
+
+Reglas:
+
+- pertenecen a contenidos de tipo `serie`.
+- `numero` es unico por serie.
+
+### episodios
+
+```text
+id PK
+temporada_id FK -> temporadas.id
+numero
+titulo
+duracion_min
+storage_folder_id
+video_storage_key
+video_mime
+video_size
+thumbnail_url
+```
+
+Reglas:
+
+- pertenecen a una temporada.
+- `numero` es unico por temporada.
+- el video se carga en el episodio.
+- `thumbnail_url` se genera desde el video cuando hay thumbnail disponible.
+
+### generos
+
+```text
+id PK
+nombre UK
+```
+
+### video_variants
+
+```text
+id PK
+contenido_id FK opcional -> contenidos.id
+episodio_id FK opcional -> episodios.id
+quality
+video_storage_key
+video_mime
+video_size
+```
+
+Reglas:
+
+- `quality` debe ser `FHD`, `QHD` o `4K`.
+- referencia un contenido o un episodio, nunca ambos.
+- una pelicula/episodio puede tener una variante por calidad.
+- se generan con FFmpeg al subir video.
+
+### vistas
+
+```text
+id PK
+perfil_id FK -> perfiles.id
+contenido_id FK opcional -> contenidos.id
+episodio_id FK opcional -> episodios.id
+fecha
+segundos_vistos
+terminado
+```
+
+Reglas:
+
+- referencia una pelicula (`contenido_id`) o un episodio (`episodio_id`), nunca ambos.
+- hay una vista por perfil/contenido o por perfil/episodio.
+- se marca `terminado` al llegar al 90% de duracion.
+- el repositorio hace upsert y tolera reportes simultaneos del reproductor.
+
+### calificaciones
+
+```text
+id PK
+perfil_id FK -> perfiles.id
+contenido_id FK -> contenidos.id
+puntaje
+fecha
+```
+
+Reglas:
+
+- `puntaje` va de 1 a 5.
+- un perfil tiene una sola calificacion por contenido.
+- solo se puede calificar contenido empezado.
+- la calificacion se puede eliminar.
+
+### descargas
+
+```text
+id PK
+perfil_id FK -> perfiles.id
+contenido_id FK opcional -> contenidos.id
+episodio_id FK opcional -> episodios.id
+fecha_descarga
+vence_en
+eliminada
+```
+
+Reglas:
+
+- referencia una pelicula o un episodio, nunca ambos.
+- vence a los 30 dias.
+- las descargas vencidas o eliminadas no cuentan para el limite del plan.
 
 ## Tablas Puente
 
-Las relaciones N:M se guardan con tablas intermedias:
+### contenido_generos
 
-- `contenido_generos`: `contenido_id FK`, `genero_id FK`.
-- `mi_lista`: `perfil_id FK`, `contenido_id FK`, `fecha_agregada`.
+```text
+contenido_id FK -> contenidos.id
+genero_id FK -> generos.id
+PK (contenido_id, genero_id)
+```
 
-## Relaciones Con Recurso Alternativo
+### mi_lista
 
-`vistas` y `descargas` tienen una regla especial: apuntan a una pelicula (`contenido_id`) o a un episodio (`episodio_id`), pero no a ambos al mismo tiempo.
+```text
+perfil_id FK -> perfiles.id
+contenido_id FK -> contenidos.id
+fecha_agregada
+PK (perfil_id, contenido_id)
+```
 
-Constraint usada:
+Reglas:
+
+- una entrada no se duplica para el mismo perfil/contenido.
+- perfiles infantiles solo pueden agregar/ver contenido `ATP`.
+
+## Constraints De Recurso Alternativo
+
+`vistas`, `descargas` y `video_variants` usan una regla de exclusividad:
 
 ```sql
 CHECK (
@@ -129,44 +248,38 @@ CHECK (
 )
 ```
 
-## Tabla Tecnica Omitida Del Diagrama Simple
+En `video_variants` la idea es equivalente: `contenido_id` o `episodio_id`, no ambos.
 
-El proyecto tambien tiene `video_variants`, usada para guardar variantes de calidad (`FHD`, `QHD`, `4K`) de peliculas o episodios. Se omite del diagrama principal porque es soporte tecnico de streaming y no una entidad central de la consigna.
+## Reglas De Negocio
 
-Si se dibuja, tiene estas relaciones:
+Planes:
 
 ```text
-[CONTENIDO] 1 ----- N [VIDEO_VARIANT]
-[EPISODIO]  1 ----- N [VIDEO_VARIANT]
+basico   -> 1 perfil, calidad FHD, 0 descargas activas
+estandar -> 2 perfiles, calidad QHD, 10 descargas activas
+premium  -> 5 perfiles, calidad 4K, 30 descargas activas
 ```
 
-Tambien usa la misma regla de exclusividad: `contenido_id` o `episodio_id`, no ambos.
+Restricciones:
 
-## Relaciones
+- perfiles infantiles solo acceden a contenido `ATP`;
+- una pelicula debe tener video directo;
+- una serie debe tener al menos una temporada y cada temporada publicada debe tener episodios;
+- el playback valida perfil, plan y calidad;
+- los tokens de stream son temporales y atan recurso, accion y calidad;
+- el admin principal ID `1` no puede perder permisos admin ni eliminarse.
 
-- `cuentas 1:N perfiles`
-- `contenidos 1:N temporadas`
-- `temporadas 1:N episodios`
-- `perfiles 1:N vistas`
-- `contenidos 0:N vistas` para peliculas; cada vista puede apuntar a 0 o 1 contenido.
-- `episodios 0:N vistas` para series; cada vista puede apuntar a 0 o 1 episodio.
-- `perfiles 1:N calificaciones`
-- `contenidos 1:N calificaciones`
-- `contenidos N:M generos` mediante `contenido_generos`
-- `perfiles N:M contenidos` mediante `mi_lista`
-- `perfiles 1:N descargas`
-- `contenidos 0:N descargas` para peliculas; cada descarga puede apuntar a 0 o 1 contenido.
-- `episodios 0:N descargas` para series; cada descarga puede apuntar a 0 o 1 episodio.
-- `contenidos 0:N video_variants` para peliculas; cada variante puede apuntar a 0 o 1 contenido.
-- `episodios 0:N video_variants` para series; cada variante puede apuntar a 0 o 1 episodio.
+## Como Dibujarlo En Draw.io
 
-## Reglas Principales
+1. Crear cajas para: `cuentas`, `perfiles`, `contenidos`, `temporadas`, `episodios`, `generos`, `video_variants`, `vistas`, `calificaciones`, `descargas`.
+2. Agregar cajas puente: `contenido_generos` y `mi_lista`.
+3. Dibujar relaciones 1:N y N:M segun el diagrama simplificado.
+4. En `vistas`, `descargas` y `video_variants`, marcar que el recurso puede ser contenido o episodio, pero no ambos.
+5. Agregar notas de plan/calidad y perfil infantil si se necesita explicar reglas de negocio.
 
-- Planes validos: `basico`, `estandar`, `premium`.
-- Limite de perfiles: `basico=1`, `estandar=2`, `premium=5`.
-- Limite de descargas activas por cuenta: `basico=0`, `estandar=10`, `premium=30`.
-- Clasificaciones validas: `ATP`, `+13`, `+16`, `+18`.
-- Perfiles infantiles solo pueden listar, reproducir, guardar o descargar contenido `ATP`.
-- Una vista referencia una pelicula o un episodio, nunca ambos.
-- Una descarga referencia una pelicula o un episodio, nunca ambos.
-- Un perfil solo puede tener una calificacion por contenido.
+## Archivos Relacionados
+
+- SQL base: `../database.sql`
+- Modelos SQLAlchemy: `../backend/src/db/models/`
+- Repositorios: `../backend/src/repositories/`
+- Servicios de negocio: `../backend/src/services/`
