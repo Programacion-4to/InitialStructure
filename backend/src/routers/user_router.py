@@ -23,6 +23,14 @@ from src.utils import ForbiddenError
 
 router = APIRouter(prefix="/cuentas", tags=["cuentas"])
 
+ROOT_ADMIN_ID = 1
+
+
+def require_root_admin(current_user: Cuenta = Depends(require_admin)) -> Cuenta:
+    if current_user.id != ROOT_ADMIN_ID:
+        raise ForbiddenError("Solo el admin principal puede cambiar permisos de admin")
+    return current_user
+
 
 @router.post("", response_model=CuentaResponseDTO, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=CuentaResponseDTO, status_code=status.HTTP_201_CREATED)
@@ -34,8 +42,8 @@ def create_user(
     """Crear una nueva cuenta de usuario."""
     dto = CreateCuentaDTO(**payload.model_dump())
 
-    if dto.is_admin and (not current_user or not current_user.is_admin):
-        raise ForbiddenError("Solo una cuenta admin puede crear cuentas admin")
+    if dto.is_admin and (not current_user or current_user.id != ROOT_ADMIN_ID):
+        raise ForbiddenError("Solo el admin principal puede crear cuentas admin")
 
     return CuentaService(db).create(dto)
 
@@ -60,7 +68,8 @@ def create_profile(
     if requested_account_id is not None and requested_account_id != current_user.id and not current_user.is_admin:
         raise ForbiddenError("No autorizado para crear un perfil en otra cuenta")
 
-    dto = CreatePerfilDTO(**payload_data, cuenta_id=current_user.id)
+    target_account_id = requested_account_id or current_user.id
+    dto = CreatePerfilDTO(**payload_data, cuenta_id=target_account_id)
     return PerfilService(db).create(dto)
 
 
@@ -141,10 +150,31 @@ def update_user(
         raise ForbiddenError("No autorizado para actualizar esta cuenta")
 
     payload_data = payload.model_dump(exclude_unset=True)
-    if "is_admin" in payload_data and not current_user.is_admin:
-        raise ForbiddenError("Solo una cuenta admin puede cambiar el estado admin")
+    if "is_admin" in payload_data:
+        if current_user.id != ROOT_ADMIN_ID:
+            raise ForbiddenError("Solo el admin principal puede cambiar permisos de admin")
+        if user_id == ROOT_ADMIN_ID and payload_data["is_admin"] is False:
+            raise ForbiddenError("No se puede quitar permisos al admin principal")
 
     dto = UpdateCuentaDTO(**payload_data)
+    return CuentaService(db).update(user_id, dto)
+
+
+@router.put("/{user_id}/admin", response_model=CuentaResponseDTO)
+def update_user_admin_permission(
+    user_id: int,
+    payload: UpdateCuentaSchema,
+    _root_admin: Cuenta = Depends(require_root_admin),
+    db: Session = Depends(get_db),
+):
+    """Permite al admin principal activar o quitar permisos admin."""
+    payload_data = payload.model_dump(exclude_unset=True)
+    if "is_admin" not in payload_data or len(payload_data) != 1:
+        raise ForbiddenError("Solo se puede cambiar el permiso admin desde esta accion")
+    if user_id == ROOT_ADMIN_ID and payload_data["is_admin"] is False:
+        raise ForbiddenError("No se puede quitar permisos al admin principal")
+
+    dto = UpdateCuentaDTO(is_admin=payload_data["is_admin"])
     return CuentaService(db).update(user_id, dto)
 
 
@@ -157,4 +187,6 @@ def delete_user(
     """Eliminar una cuenta de usuario."""
     if current_user.id != user_id and not current_user.is_admin:
         raise ForbiddenError("No autorizado para eliminar esta cuenta")
+    if user_id == ROOT_ADMIN_ID:
+        raise ForbiddenError("No se puede eliminar el admin principal")
     CuentaService(db).delete(user_id)

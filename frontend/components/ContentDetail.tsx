@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Play, Plus, Check, Star, Loader2, Film, Tv } from "lucide-react";
 import { apiRequest, getSelectedProfile, getBackendUrl, getAssetUrl } from "@/lib/api";
-import type { Contenido, Temporada, Episodio, PlaybackResponse, MiListaItem, VideoVariant } from "@/lib/types";
+import type { Contenido, Temporada, Episodio, PlaybackResponse, VideoVariant } from "@/lib/types";
 
 interface ContentDetailProps {
   content: Contenido;
@@ -54,9 +54,9 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
   // Check if content is in Mi Lista
   useEffect(() => {
     if (profile) {
-      apiRequest<MiListaItem[]>(`/perfiles/${profile.id}/mi-lista`)
+      apiRequest<Contenido[]>(`/perfiles/${profile.id}/mi-lista`)
         .then((data) => {
-          const found = data.some((item) => item.contenido_id === content.id);
+          const found = data.some((item) => item.id === content.id);
           setInMiLista(found);
         })
         .catch(() => {});
@@ -65,6 +65,7 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
 
   const movieQualities = qualityOptions(content.video_variants);
   const portadaUrl = getAssetUrl(content.portada_url);
+  const averageRating = content.promedio_calificaciones ?? content.promedio_calificacion;
 
   const handlePlayMovie = async () => {
     setPlayLoading("movie");
@@ -180,10 +181,10 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
             <span className="px-2 py-0.5 bg-secondary text-secondary-foreground rounded">
               {content.tipo === "pelicula" ? "Pelicula" : "Serie"}
             </span>
-            {content.promedio_calificacion !== undefined && content.promedio_calificacion > 0 && (
+            {averageRating !== undefined && averageRating > 0 && (
               <span className="flex items-center gap-1 text-yellow-500">
                 <Star size={14} fill="currentColor" />
-                {content.promedio_calificacion.toFixed(1)}
+                {averageRating.toFixed(1)}
               </span>
             )}
           </div>

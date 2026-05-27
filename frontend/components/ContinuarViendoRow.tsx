@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Play, Film, Tv } from "lucide-react";
 import { useRef } from "react";
-import { getAssetUrl } from "@/lib/api";
+import { apiRequest, getAssetUrl, getBackendUrl, getSelectedProfile } from "@/lib/api";
 import type { ContinuarViendoItem } from "@/lib/types";
+import type { PlaybackResponse } from "@/lib/types";
 
 interface ContinuarViendoRowProps {
   items: ContinuarViendoItem[];
@@ -67,12 +68,10 @@ export function ContinuarViendoRow({ items }: ContinuarViendoRowProps) {
 }
 
 function ContinuarViendoCard({ item }: { item: ContinuarViendoItem }) {
+  const router = useRouter();
   const { contenido, episodio, temporada, segundos_vistos, duracion_total } = item;
   const portadaUrl = getAssetUrl(contenido.portada_url);
   const progress = duracion_total > 0 ? Math.min((segundos_vistos / duracion_total) * 100, 100) : 0;
-
-  // For series, link to the content detail page; for movies, link directly to content
-  const href = `/contenido/${contenido.id}`;
 
   const subtitle =
     episodio && temporada
@@ -81,8 +80,33 @@ function ContinuarViendoCard({ item }: { item: ContinuarViendoItem }) {
       ? "Pelicula"
       : null;
 
+  const handleContinue = async () => {
+    const profile = getSelectedProfile();
+    const params = new URLSearchParams();
+    if (profile?.id) params.set("perfil_id", String(profile.id));
+
+    const path = episodio
+      ? `/episodios/${episodio.id}/playback${params.toString() ? `?${params.toString()}` : ""}`
+      : `/contenidos/${contenido.id}/playback${params.toString() ? `?${params.toString()}` : ""}`;
+    const data = await apiRequest<PlaybackResponse>(path);
+    const streamUrl = getBackendUrl(data.stream_url);
+    const title = episodio && temporada
+      ? `${contenido.titulo} - T${temporada.numero} E${episodio.numero}: ${episodio.titulo}`
+      : contenido.titulo;
+    const playerParams = new URLSearchParams({
+      url: streamUrl,
+      title,
+      contenido_id: String(contenido.id),
+      t: String(segundos_vistos),
+    });
+    if (episodio) {
+      playerParams.set("episodio_id", String(episodio.id));
+    }
+    router.push(`/reproducir?${playerParams.toString()}`);
+  };
+
   return (
-    <Link href={href} className="group flex-shrink-0 w-48 md:w-56">
+    <button type="button" onClick={handleContinue} className="group flex-shrink-0 w-48 md:w-56 text-left">
       {/* Thumbnail */}
       <div className="relative aspect-video rounded-lg overflow-hidden bg-secondary mb-2">
         {portadaUrl ? (
@@ -124,6 +148,6 @@ function ContinuarViendoCard({ item }: { item: ContinuarViendoItem }) {
       {subtitle && (
         <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
       )}
-    </Link>
+    </button>
   );
 }

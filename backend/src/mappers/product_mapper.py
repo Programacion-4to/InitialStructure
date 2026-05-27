@@ -39,7 +39,10 @@ def to_episodio_response(episodio: Episodio) -> EpisodioResponseDTO:    # Convie
 
 
 def to_vista_response(vista: Vista) -> VistaResponseDTO:                # Convierte Vista a DTO
-    return VistaResponseDTO.model_validate(vista)                       # Valida y transforma al esquema
+    dto = VistaResponseDTO.model_validate(vista)                        # Valida y transforma al esquema
+    if dto.contenido_id is None and vista.episodio is not None:
+        dto.contenido_id = vista.episodio.temporada.contenido_id
+    return dto
 
 
 def to_descarga_response(descarga: Descarga) -> DescargaResponseDTO:

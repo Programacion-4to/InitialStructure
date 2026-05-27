@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const backendUrl = process.env.INTERNAL_BACKEND_URL || "http://backend:8000";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    proxyClientMaxBodySize: "5gb",
+  },
   async rewrites() {
     return [
       {

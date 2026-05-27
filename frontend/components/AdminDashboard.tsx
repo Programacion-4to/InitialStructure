@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Film, Loader2, LogOut, Play, Plus, RefreshCw, Tv, Upload } from "lucide-react";
+import { BarChart3, Film, Loader2, LogOut, Play, Plus, RefreshCw, ShieldCheck, Tv, Upload } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { apiRequest, getAssetUrl, getBackendUrl, logout, MAX_UPLOAD_SIZE, getReporteVisualizacion, type ReporteVisualizacion } from "@/lib/api";
-import type { Contenido, Episodio, Genero, PlaybackResponse, Temporada, VideoVariant } from "@/lib/types";
+import type { AuthAccount, Contenido, Episodio, Genero, PlaybackResponse, Temporada, VideoVariant } from "@/lib/types";
 
 interface AdminDashboardProps {
+  account: AuthAccount;
   onLogout: () => void;
 }
 
 type Message = { type: "ok" | "error"; text: string } | null;
-type AdminTab = "crear" | "modificar" | "eliminar" | "reportes";
+type AdminTab = "crear" | "modificar" | "eliminar" | "reportes" | "permisos";
 type PlaybackResource = {
   type: "contenido" | "episodio";
   id: number;
@@ -23,9 +24,12 @@ type TestPlayback = PlaybackResource & {
   selectedQuality: string;
 };
 
-export function AdminDashboard({ onLogout }: AdminDashboardProps) {
+const ROOT_ADMIN_ID = 1;
+
+export function AdminDashboard({ account, onLogout }: AdminDashboardProps) {
   const [contenidos, setContenidos] = useState<Contenido[]>([]);
   const [generos, setGeneros] = useState<Genero[]>([]);
+  const [cuentas, setCuentas] = useState<AuthAccount[]>([]);
   const [temporadas, setTemporadas] = useState<Temporada[]>([]);
   const [episodios, setEpisodios] = useState<Episodio[]>([]);
   const [selectedContenidoId, setSelectedContenidoId] = useState("");
@@ -59,6 +63,8 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [reporteMes, setReporteMes] = useState(new Date().getMonth() + 1);
   const [reporte, setReporte] = useState<ReporteVisualizacion | null>(null);
   const [reporteLoading, setReporteLoading] = useState(false);
+  const [permissionSavingId, setPermissionSavingId] = useState<number | null>(null);
+  const isRootAdmin = account.id === ROOT_ADMIN_ID;
 
   const selectedContenido = useMemo(
     () => contenidos.find((contenido) => contenido.id === Number(selectedContenidoId)),
@@ -94,6 +100,12 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
       ]);
       setContenidos(dedupeById(contentData));
       setGeneros(generoData);
+      if (isRootAdmin) {
+        const accountData = await apiRequest<AuthAccount[]>("/cuentas");
+        setCuentas(accountData);
+      } else {
+        setCuentas([]);
+      }
     } catch (error) {
       setMessage({
         type: "error",
@@ -106,7 +118,13 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   useEffect(() => {
     loadBaseData();
-  }, []);
+  }, [isRootAdmin]);
+
+  useEffect(() => {
+    if (activeTab === "permisos" && !isRootAdmin) {
+      setActiveTab("crear");
+    }
+  }, [activeTab, isRootAdmin]);
 
   useEffect(() => {
     setUpdateContenidoVideoName("");
@@ -544,6 +562,27 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   };
 
+  const handleAdminPermissionChange = async (target: AuthAccount, isAdmin: boolean) => {
+    if (target.id === ROOT_ADMIN_ID && !isAdmin) {
+      setMessage({ type: "error", text: "No se puede quitar permisos al admin principal" });
+      return;
+    }
+
+    setPermissionSavingId(target.id);
+    try {
+      const updated = await apiRequest<AuthAccount>(`/cuentas/${target.id}/admin`, {
+        method: "PUT",
+        body: JSON.stringify({ is_admin: isAdmin }),
+      });
+      setCuentas((current) => current.map((cuenta) => (cuenta.id === updated.id ? updated : cuenta)));
+      showOk(isAdmin ? `${target.email} ahora es admin` : `${target.email} ya no es admin`);
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo cambiar el permiso" });
+    } finally {
+      setPermissionSavingId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
@@ -600,6 +639,7 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
             ["modificar", "Modificar"],
             ["eliminar", "Eliminar"],
             ["reportes", "Reportes"],
+            ...(isRootAdmin ? ([["permisos", "Permisos"]] as const) : []),
           ].map(([id, label]) => (
             <button
               key={id}
@@ -1158,6 +1198,54 @@ export function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   Selecciona un anio y mes, luego haz clic en &quot;Generar reporte&quot; para ver las estadisticas de visualizacion.
                 </p>
               )}
+            </AdminPanel>
+          </section>
+        )}
+
+        {activeTab === "permisos" && isRootAdmin && (
+          <section className="grid gap-4">
+            <AdminPanel title="Permisos de administrador">
+              <div className="grid gap-3">
+                {cuentas.map((cuenta) => {
+                  const isPrincipal = cuenta.id === ROOT_ADMIN_ID;
+                  const saving = permissionSavingId === cuenta.id;
+
+                  return (
+                    <div
+                      key={cuenta.id}
+                      className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-foreground">{cuenta.email}</p>
+                          {cuenta.is_admin && (
+                            <span className="inline-flex items-center gap-1 rounded bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">
+                              <ShieldCheck size={12} />
+                              Admin
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          ID {cuenta.id} - Plan {cuenta.plan}
+                          {isPrincipal ? " - Admin principal" : ""}
+                        </p>
+                      </div>
+
+                      <label className="flex shrink-0 items-center gap-2 text-sm font-medium text-foreground">
+                        {saving ? <Loader2 size={16} className="animate-spin text-muted-foreground" /> : null}
+                        <input
+                          type="checkbox"
+                          checked={cuenta.is_admin}
+                          disabled={saving || isPrincipal}
+                          onChange={(event) => handleAdminPermissionChange(cuenta, event.target.checked)}
+                          className="h-5 w-5 accent-[var(--primary)] disabled:opacity-50"
+                        />
+                        Puede administrar
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
             </AdminPanel>
           </section>
         )}

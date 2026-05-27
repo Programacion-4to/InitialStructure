@@ -31,6 +31,7 @@ from src.dtos import (
 from src.schemas.auth_schema import PerfilAuthResponseSchema, PerfilAuthSchema
 from src.middlewares import get_current_user_from_swagger, get_owned_profile, require_admin
 from src.schemas.product_schema import (
+    AddMiListaSchema,
     CreateEpisodioSchema,
     CreateDescargaSchema,
     CreateTemporadaSchema,
@@ -53,10 +54,16 @@ from src.services.product_service import (
 from src.services.auth_service import AuthService
 from src.dtos import UpdateEpisodioDTO, UpdateTemporadaDTO
 from src.services.storage_service import StorageService
-from src.utils import UnauthorizedError, create_access_token, decode_access_token
+from src.utils import BadRequestError, UnauthorizedError, create_access_token, decode_access_token
 
 
 router = APIRouter(tags=["products"])
+
+PLAN_MAX_QUALITY = {
+    "basico": "FHD",
+    "estandar": "QHD",
+    "premium": "4K",
+}
 
 
 MEDIA_TOKEN_TTL_MINUTES = 10
@@ -288,13 +295,19 @@ def get_contenido_playback(
         profile = db.query(Perfil).filter(Perfil.id == perfil_id).first()
         if not profile or (profile.cuenta_id != current_user.id and not current_user.is_admin):
             raise UnauthorizedError("Perfil no autorizado")
-    video = ContenidoService(db).get_video_source(contenido_id, quality, perfil_id=perfil_id)
-    token = _create_media_token(current_user, "contenido", contenido_id, quality, "stream")
+    video = ContenidoService(db).get_video_source(
+        contenido_id,
+        quality,
+        perfil_id=perfil_id,
+        max_quality=PLAN_MAX_QUALITY.get(current_user.plan, "FHD"),
+    )
+    effective_quality = video.quality or quality
+    token = _create_media_token(current_user, "contenido", contenido_id, effective_quality, "stream")
     return {
         "stream_url": (
             f"/api/v1/contenidos/{contenido_id}/stream"
             f"?token={quote(token)}"
-            + (f"&quality={quote(quality)}" if quality else "")
+            + (f"&quality={quote(effective_quality)}" if effective_quality else "")
         ),
         "mime_type": video.mime_type,
     }
@@ -453,13 +466,19 @@ def get_episodio_playback(
         profile = db.query(Perfil).filter(Perfil.id == perfil_id).first()
         if not profile or (profile.cuenta_id != current_user.id and not current_user.is_admin):
             raise UnauthorizedError("Perfil no autorizado")
-    video = EpisodioService(db).get_video_source(episodio_id, quality, perfil_id=perfil_id)
-    token = _create_media_token(current_user, "episodio", episodio_id, quality, "stream")
+    video = EpisodioService(db).get_video_source(
+        episodio_id,
+        quality,
+        perfil_id=perfil_id,
+        max_quality=PLAN_MAX_QUALITY.get(current_user.plan, "FHD"),
+    )
+    effective_quality = video.quality or quality
+    token = _create_media_token(current_user, "episodio", episodio_id, effective_quality, "stream")
     return {
         "stream_url": (
             f"/api/v1/episodios/{episodio_id}/stream"
             f"?token={quote(token)}"
-            + (f"&quality={quote(quality)}" if quality else "")
+            + (f"&quality={quote(effective_quality)}" if effective_quality else "")
         ),
         "mime_type": video.mime_type,
     }
@@ -536,6 +555,15 @@ def create_vista_recurso(
     return VistaService(db).create_or_update(dto)
 
 
+@router.get("/perfiles/{perfil_id}/vistas", response_model=list[VistaResponseDTO])
+def list_vistas(
+    perfil_id: int,
+    profile: Perfil = Depends(get_owned_profile),
+    db: Session = Depends(get_db),
+):
+    return VistaService(db).list_by_perfil(profile.id)
+
+
 @router.put(
     "/perfiles/{perfil_id}/vistas",
     response_model=VistaResponseDTO,
@@ -603,11 +631,15 @@ def desbloquear_perfil(
 @router.post("/perfiles/{perfil_id}/mi-lista", response_model=list[ContenidoResponseDTO])
 def add_to_mi_lista(
     perfil_id: int,
-    contenido_id: int,
+    payload: AddMiListaSchema | None = None,
+    contenido_id: int | None = Query(default=None),
     profile: Perfil = Depends(get_owned_profile),
     db: Session = Depends(get_db),
 ):
-    return MiListaService(db).add(profile.id, contenido_id)
+    target_contenido_id = payload.contenido_id if payload else contenido_id
+    if target_contenido_id is None:
+        raise BadRequestError("contenido_id es requerido")
+    return MiListaService(db).add(profile.id, target_contenido_id)
 
 
 @router.get("/perfiles/{perfil_id}/mi-lista", response_model=list[ContenidoResponseDTO])
@@ -687,6 +719,19 @@ def create_calificacion(
 ):
     dto = _calificacion_dto_from_request(profile.id, contenido_id, payload)
     return CalificacionService(db).create_or_update(dto)
+
+
+@router.get(
+    "/perfiles/{perfil_id}/calificaciones/{contenido_id}",
+    response_model=CalificacionResponseDTO,
+)
+def get_calificacion(
+    perfil_id: int,
+    contenido_id: int,
+    profile: Perfil = Depends(get_owned_profile),
+    db: Session = Depends(get_db),
+):
+    return CalificacionService(db).get(profile.id, contenido_id)
 
 
 @router.put(

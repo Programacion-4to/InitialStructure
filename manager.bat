@@ -190,6 +190,17 @@ if errorlevel 1 (
     pause
     goto menu
 )
+call :write_host_ip
+docker compose up -d
+if errorlevel 1 (
+    pause
+    goto menu
+)
+call :wait_frontend_origin
+if errorlevel 1 (
+    pause
+    goto menu
+)
 call :load_tunnel_token
 if errorlevel 1 (
     pause
@@ -290,6 +301,13 @@ goto :eof
 
 :write_host_ip
 powershell -NoProfile -Command "$hostIp='127.0.0.1'; foreach ($ip in Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue) { if ($ip.IPAddress -notlike '127.*' -and $ip.IPAddress -notlike '169.254.*' -and $ip.InterfaceOperationalStatus -eq 'Up') { $hostIp=$ip.IPAddress; break } }; if (Test-Path '.env') { $c=Get-Content '.env'; if ($c -match '^HOST_IP=') { $c = $c -replace '^HOST_IP=.*',('HOST_IP=' + $hostIp); Set-Content -Path '.env' -Value $c } else { Add-Content -Path '.env' -Value ('HOST_IP=' + $hostIp) } } else { Set-Content -Path '.env' -Value ('HOST_IP=' + $hostIp) }"
+goto :eof
+
+:wait_frontend_origin
+echo.
+echo Esperando a que el frontend responda en http://localhost:3000 ...
+powershell -NoProfile -Command "$ok=$false; for ($i=0; $i -lt 30; $i++) { try { $r=Invoke-WebRequest -UseBasicParsing 'http://localhost:3000' -TimeoutSec 3; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 500) { $ok=$true; break } } catch {}; Start-Sleep -Seconds 2 }; if (-not $ok) { Write-Host 'El frontend no responde en localhost:3000. Revisa la opcion 3 para ver logs.'; exit 1 }"
+if errorlevel 1 exit /b 1
 goto :eof
 
 :end

@@ -17,6 +17,7 @@ export function ProfileCreateScreen({ accountId, onProfileCreated, onCancel, com
   const [nombre, setNombre] = useState("");
   const [pin, setPin] = useState("");
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [esInfantil, setEsInfantil] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,6 +62,7 @@ export function ProfileCreateScreen({ accountId, onProfileCreated, onCancel, com
           nombre: cleanName,
           pin: cleanPin || null,
           avatar,
+          es_infantil: esInfantil,
         }),
       });
       const selectedProfile = { id: profile.id, nombre: profile.nombre, avatar: profile.avatar };
@@ -139,6 +141,20 @@ export function ProfileCreateScreen({ accountId, onProfileCreated, onCancel, com
           disabled={loading}
         />
         <p className="mb-5 text-xs text-muted-foreground">Dejalo vacio si no queres proteger este perfil.</p>
+
+        <label htmlFor="profile-kind" className="mb-2 block text-sm font-medium text-foreground">
+          Tipo de perfil
+        </label>
+        <select
+          id="profile-kind"
+          value={esInfantil ? "infantil" : "adulto"}
+          onChange={(event) => setEsInfantil(event.target.value === "infantil")}
+          className="mb-5 w-full rounded-lg border border-border bg-secondary px-4 py-3 text-foreground outline-none focus:ring-2 focus:ring-primary"
+          disabled={loading}
+        >
+          <option value="adulto">Adulto</option>
+          <option value="infantil">Infantil</option>
+        </select>
 
         {error && <p className="mb-4 text-center text-sm text-primary">{error}</p>}
 

@@ -97,6 +97,7 @@ export interface AuthResponse {
   id?: number;
   is_admin?: boolean;
   email?: string;
+  plan?: "basico" | "estandar" | "premium";
   user?: User;
 }
 

@@ -4,11 +4,11 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Play, Plus, Check, Star, Loader2, Film, Tv } from "lucide-react";
-import { apiRequest, getSelectedProfile, getBackendUrl, getAssetUrl, getCalificacion, setCalificacion } from "@/lib/api";
+import { apiRequest, deleteCalificacion, getBackendUrl, getAssetUrl, getCalificacion, setCalificacion } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { BrandLogo } from "@/components/BrandLogo";
 import { StarRating } from "@/components/StarRating";
-import type { Contenido, Temporada, Episodio, PlaybackResponse, MiListaItem, VideoVariant, Profile, Vista } from "@/lib/types";
+import type { Contenido, Temporada, Episodio, PlaybackResponse, VideoVariant, Profile, Vista } from "@/lib/types";
 
 export default function ContentDetailPage() {
   const params = useParams();
@@ -33,6 +33,7 @@ export default function ContentDetailPage() {
   const [userRating, setUserRating] = useState<number>(0);
   const [hasWatched, setHasWatched] = useState(false);
   const [ratingLoading, setRatingLoading] = useState(false);
+  const [vistas, setVistas] = useState<Vista[]>([]);
 
   // Auth check
   useEffect(() => {
@@ -113,9 +114,9 @@ export default function ContentDetailPage() {
   // Check if content is in Mi Lista
   useEffect(() => {
     if (profile && content) {
-      apiRequest<MiListaItem[]>(`/perfiles/${profile.id}/mi-lista`)
+        apiRequest<Contenido[]>(`/perfiles/${profile.id}/mi-lista`)
         .then((data) => {
-          const found = data.some((item) => item.contenido_id === content.id);
+          const found = data.some((item) => item.id === content.id);
           setInMiLista(found);
         })
         .catch(() => {});
@@ -129,12 +130,11 @@ export default function ContentDetailPage() {
     // Check if user has started watching
     apiRequest<Vista[]>(`/perfiles/${profile.id}/vistas`)
       .then((vistas) => {
-        const watched = vistas.some(
-          (v) => v.contenido_id === content.id || (content.tipo === "serie" && v.contenido_id === content.id)
-        );
+        setVistas(vistas);
+        const watched = vistas.some((v) => v.contenido_id === content.id);
         setHasWatched(watched);
       })
-      .catch(() => {});
+      .catch(() => setVistas([]));
 
     // Load user's existing rating
     getCalificacion(profile.id, content.id)
@@ -142,15 +142,19 @@ export default function ContentDetailPage() {
         if (cal) {
           setUserRating(cal.puntaje);
           setHasWatched(true); // If they rated, they must have watched
+        } else {
+          setUserRating(0);
         }
       })
       .catch(() => {});
   }, [profile, content]);
 
   const movieQualities = qualityOptions(content?.video_variants);
+  const availableMovieQualities = filterQualitiesForPlan(movieQualities, account?.plan);
   const portadaUrl = content ? getAssetUrl(content.portada_url) : null;
+  const averageRating = content?.promedio_calificaciones ?? content?.promedio_calificacion;
 
-  const handlePlayMovie = async () => {
+  const handlePlayMovie = async (startAt = 0) => {
     if (!content) return;
 
     // HU4: Restriction check
@@ -161,16 +165,20 @@ export default function ContentDetailPage() {
 
     setPlayLoading("movie");
     try {
-      const quality = selectedMovieQuality || movieQualities[0] || "";
+      const quality = selectedMovieQuality || availableMovieQualities[0] || "";
       const params = new URLSearchParams();
       if (quality) params.set("quality", quality);
-      if (currentProfileData?.id) params.set("perfil_id", String(currentProfileData.id));
+      if (profile?.id) params.set("perfil_id", String(profile.id));
       const path = `/contenidos/${content.id}/playback${params.toString() ? `?${params.toString()}` : ""}`;
       const data = await apiRequest<PlaybackResponse>(path);
       const streamUrl = getBackendUrl(data.stream_url);
-      router.push(
-        `/reproducir?url=${encodeURIComponent(streamUrl)}&title=${encodeURIComponent(content.titulo)}&contenido_id=${content.id}`
-      );
+      const playerParams = new URLSearchParams({
+        url: streamUrl,
+        title: content.titulo,
+        contenido_id: String(content.id),
+      });
+      playerParams.set("t", String(Math.max(0, startAt)));
+      router.push(`/reproducir?${playerParams.toString()}`);
     } catch (err) {
       if (err instanceof Error && err.message.includes("403")) {
         setError("Este contenido no esta disponible para perfiles infantiles.");
@@ -182,7 +190,7 @@ export default function ContentDetailPage() {
     }
   };
 
-  const handlePlayEpisode = async (episodio: Episodio) => {
+  const handlePlayEpisode = async (episodio: Episodio, startAt = 0) => {
     if (!content || !selectedTemporada) return;
 
     // HU4: Restriction check
@@ -194,17 +202,23 @@ export default function ContentDetailPage() {
     setPlayLoading(`ep-${episodio.id}`);
     try {
       const qualities = qualityOptions(episodio.video_variants);
-      const quality = selectedEpisodeQualities[episodio.id] || qualities[0] || "";
+      const availableQualities = filterQualitiesForPlan(qualities, account?.plan);
+      const quality = selectedEpisodeQualities[episodio.id] || availableQualities[0] || "";
       const params = new URLSearchParams();
       if (quality) params.set("quality", quality);
-      if (currentProfileData?.id) params.set("perfil_id", String(currentProfileData.id));
+      if (profile?.id) params.set("perfil_id", String(profile.id));
       const path = `/episodios/${episodio.id}/playback${params.toString() ? `?${params.toString()}` : ""}`;
       const data = await apiRequest<PlaybackResponse>(path);
       const streamUrl = getBackendUrl(data.stream_url);
       const title = `${content.titulo} - T${selectedTemporada.numero} E${episodio.numero}: ${episodio.titulo}`;
-      router.push(
-        `/reproducir?url=${encodeURIComponent(streamUrl)}&title=${encodeURIComponent(title)}&episodio_id=${episodio.id}&contenido_id=${content.id}`
-      );
+      const playerParams = new URLSearchParams({
+        url: streamUrl,
+        title,
+        episodio_id: String(episodio.id),
+        contenido_id: String(content.id),
+      });
+      playerParams.set("t", String(Math.max(0, startAt)));
+      router.push(`/reproducir?${playerParams.toString()}`);
     } catch (err) {
       if (err instanceof Error && err.message.includes("403")) {
         setError("Este contenido no esta disponible para perfiles infantiles.");
@@ -246,8 +260,31 @@ export default function ContentDetailPage() {
     try {
       await setCalificacion(profile.id, content.id, newRating);
       setUserRating(newRating);
+      const updated = await apiRequest<Contenido>(`/contenidos/${content.id}`).catch(() => null);
+      if (updated) {
+        setContent(updated);
+      }
     } catch (err) {
       console.error("Error setting rating:", err);
+    } finally {
+      setRatingLoading(false);
+    }
+  };
+
+  const handleDeleteRating = async () => {
+    if (!profile || !content || userRating <= 0) return;
+
+    setRatingLoading(true);
+    try {
+      await deleteCalificacion(profile.id, content.id);
+      setUserRating(0);
+      const updated = await apiRequest<Contenido>(`/contenidos/${content.id}`).catch(() => null);
+      if (updated) {
+        setContent(updated);
+      }
+    } catch (err) {
+      setUserRating(0);
+      console.error("Error deleting rating:", err);
     } finally {
       setRatingLoading(false);
     }
@@ -338,10 +375,10 @@ export default function ContentDetailPage() {
           <span className="px-2 py-0.5 bg-secondary text-secondary-foreground rounded">
             {content.tipo === "pelicula" ? "Pelicula" : "Serie"}
           </span>
-          {content.promedio_calificacion !== undefined && content.promedio_calificacion > 0 && (
+          {averageRating !== undefined && averageRating > 0 && (
             <span className="flex items-center gap-1 text-yellow-500">
               <Star size={14} fill="currentColor" />
-              {content.promedio_calificacion.toFixed(1)}
+              {averageRating.toFixed(1)}
             </span>
           )}
         </div>
@@ -383,9 +420,19 @@ export default function ContentDetailPage() {
               </div>
             </div>
             {userRating > 0 && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Has calificado este contenido con {userRating} estrella{userRating !== 1 ? "s" : ""}.
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Has calificado este contenido con {userRating} estrella{userRating !== 1 ? "s" : ""}.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleDeleteRating}
+                  disabled={ratingLoading}
+                  className="text-xs font-semibold text-primary hover:underline disabled:opacity-50"
+                >
+                  Eliminar calificacion
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -394,26 +441,46 @@ export default function ContentDetailPage() {
         <div className="flex flex-wrap gap-3 mb-8">
           {content.tipo === "pelicula" && !error && (
             <>
+              {(() => {
+                const vista = vistas.find((item) => item.contenido_id === content.id);
+                const canResume = Boolean(vista && !vista.terminado && vista.segundos_vistos > 0);
+                return canResume ? (
+                  <button
+                    onClick={() => handlePlayMovie(vista?.segundos_vistos || 0)}
+                    disabled={playLoading === "movie"}
+                    className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  >
+                    {playLoading === "movie" ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : (
+                      <Play size={20} fill="currentColor" />
+                    )}
+                    Continuar
+                  </button>
+                ) : null;
+              })()}
               <button
-                onClick={handlePlayMovie}
+                onClick={() => handlePlayMovie(0)}
                 disabled={playLoading === "movie"}
-                className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground font-semibold rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50"
               >
                 {playLoading === "movie" ? (
                   <Loader2 size={20} className="animate-spin" />
                 ) : (
                   <Play size={20} fill="currentColor" />
                 )}
-                Reproducir
+                {vistas.some((item) => item.contenido_id === content.id && item.segundos_vistos > 0 && !item.terminado)
+                  ? "Desde cero"
+                  : "Reproducir"}
               </button>
-              {movieQualities.length > 0 && (
+              {availableMovieQualities.length > 0 && (
                 <select
                   className="rounded-lg border border-border bg-secondary px-3 py-3 text-sm font-semibold text-secondary-foreground outline-none focus:ring-2 focus:ring-primary"
-                  value={selectedMovieQuality || movieQualities[0]}
+                  value={availableMovieQualities.includes(selectedMovieQuality) ? selectedMovieQuality : availableMovieQualities[0]}
                   onChange={(event) => setSelectedMovieQuality(event.target.value)}
                   aria-label="Calidad de pelicula"
                 >
-                  {movieQualities.map((quality) => (
+                  {availableMovieQualities.map((quality) => (
                     <option key={quality} value={quality}>
                       {quality}
                     </option>
@@ -467,7 +534,10 @@ export default function ContentDetailPage() {
             {episodios.length > 0 ? (
               <div className="space-y-3">
                 <h3 className="text-xl font-semibold text-foreground mb-4">Episodios</h3>
-                {episodios.map((episodio) => (
+                {episodios.map((episodio) => {
+                  const vista = vistas.find((item) => item.episodio_id === episodio.id);
+                  const canResume = Boolean(vista && !vista.terminado && vista.segundos_vistos > 0);
+                  return (
                   <div
                     key={episodio.id}
                     className="flex items-center justify-between gap-3 p-4 bg-card rounded-lg hover:bg-card/80 transition-colors"
@@ -494,12 +564,13 @@ export default function ContentDetailPage() {
                         </p>
                       )}
                     </div>
-                    {qualityOptions(episodio.video_variants).length > 0 && (
+                    {filterQualitiesForPlan(qualityOptions(episodio.video_variants), account?.plan).length > 0 && (
                       <select
                         className="rounded-md border border-border bg-background px-2 py-2 text-xs font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary"
                         value={
-                          selectedEpisodeQualities[episodio.id] ||
-                          qualityOptions(episodio.video_variants)[0]
+                          filterQualitiesForPlan(qualityOptions(episodio.video_variants), account?.plan).includes(selectedEpisodeQualities[episodio.id])
+                            ? selectedEpisodeQualities[episodio.id]
+                            : filterQualitiesForPlan(qualityOptions(episodio.video_variants), account?.plan)[0]
                         }
                         onChange={(event) =>
                           setSelectedEpisodeQualities((current) => ({
@@ -509,26 +580,44 @@ export default function ContentDetailPage() {
                         }
                         aria-label={`Calidad de ${episodio.titulo}`}
                       >
-                        {qualityOptions(episodio.video_variants).map((quality) => (
+                        {filterQualitiesForPlan(qualityOptions(episodio.video_variants), account?.plan).map((quality) => (
                           <option key={quality} value={quality}>
                             {quality}
                           </option>
                         ))}
                       </select>
                     )}
-                    <button
-                      onClick={() => handlePlayEpisode(episodio)}
-                      disabled={playLoading === `ep-${episodio.id}`}
-                      className="ml-2 w-10 h-10 flex-shrink-0 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
-                    >
-                      {playLoading === `ep-${episodio.id}` ? (
-                        <Loader2 size={20} className="animate-spin text-primary-foreground" />
-                      ) : (
-                        <Play size={20} fill="white" className="text-primary-foreground ml-0.5" />
+                    <div className="ml-2 flex shrink-0 items-center gap-2">
+                      {canResume && (
+                        <button
+                          type="button"
+                          onClick={() => handlePlayEpisode(episodio, vista?.segundos_vistos || 0)}
+                          disabled={playLoading === `ep-${episodio.id}`}
+                          className="rounded-md bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50"
+                        >
+                          Continuar
+                        </button>
                       )}
-                    </button>
+                      <button
+                        onClick={() => handlePlayEpisode(episodio, 0)}
+                        disabled={playLoading === `ep-${episodio.id}`}
+                        className={canResume
+                          ? "rounded-md border border-border px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+                          : "w-10 h-10 flex-shrink-0 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
+                        }
+                      >
+                        {playLoading === `ep-${episodio.id}` ? (
+                          <Loader2 size={20} className="animate-spin text-primary-foreground" />
+                        ) : canResume ? (
+                          "Desde cero"
+                        ) : (
+                          <Play size={20} fill="white" className="text-primary-foreground ml-0.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : temporadas.length > 0 ? (
               <p className="text-muted-foreground text-center py-8">
@@ -554,4 +643,9 @@ function qualityOptions(variants: VideoVariant[] | undefined): string[] {
 
 function qualityRank(quality: string): number {
   return { FHD: 1, QHD: 2, "4K": 3 }[quality] || 0;
+}
+
+function filterQualitiesForPlan(qualities: string[], plan: string | undefined): string[] {
+  const maxRank = { basico: 1, estandar: 2, premium: 3 }[plan || "basico"] || 1;
+  return qualities.filter((quality) => qualityRank(quality) <= maxRank);
 }

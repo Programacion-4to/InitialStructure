@@ -90,13 +90,14 @@ export default function LoginPage() {
       setStoredAccount({
         id: response.id,
         email: response.email || email,
+        plan: response.plan || "basico",
         is_admin: Boolean(response.is_admin),
       });
       
       login({
         id: response.id!,
         email: response.email || email,
-        plan: "basico",
+        plan: response.plan || "basico",
         is_admin: Boolean(response.is_admin),
       });
 
@@ -159,13 +160,14 @@ export default function LoginPage() {
       setStoredAccount({
         id: response.id,
         email: response.email || "admin",
+        plan: response.plan || "premium",
         is_admin: true,
       });
       
       login({
         id: response.id!,
         email: response.email || "admin",
-        plan: "premium",
+        plan: response.plan || "premium",
         is_admin: true,
       });
 

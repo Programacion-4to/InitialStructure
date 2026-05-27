@@ -88,6 +88,10 @@ class MiListaSchema(BaseModel):
     contenido_id: int
 
 
+class AddMiListaSchema(BaseModel):
+    contenido_id: int
+
+
 class CreateDescargaSchema(BaseModel):
     episodio_id: int | None = None
     contenido_id: int | None = None

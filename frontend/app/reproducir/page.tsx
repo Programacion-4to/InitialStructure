@@ -20,6 +20,7 @@ function ReproducirContent() {
   const title = searchParams.get("title") || "Reproduciendo";
   const contenidoId = searchParams.get("contenido_id");
   const episodioId = searchParams.get("episodio_id");
+  const startAt = Number(searchParams.get("t") || 0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastReportedRef = useRef<number>(-REPORT_INTERVAL_SECONDS);
@@ -96,6 +97,15 @@ function ReproducirContent() {
     }
   }, [reportProgress]);
 
+  const handleLoadedMetadata = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(startAt) || startAt < 0) return;
+    if (!video.duration || startAt < video.duration) {
+      video.currentTime = startAt;
+      lastReportedRef.current = startAt;
+    }
+  }, [startAt]);
+
   // Report final position on pause / before unload
   const handlePause = useCallback(() => {
     const video = videoRef.current;
@@ -167,6 +177,7 @@ function ReproducirContent() {
         playsInline
         onTimeUpdate={handleTimeUpdate}
         onPause={handlePause}
+        onLoadedMetadata={handleLoadedMetadata}
       >
         Tu navegador no soporta la reproduccion de video.
       </video>

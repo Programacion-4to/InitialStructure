@@ -15,6 +15,7 @@ export default function BrowseLayout({
   const pathname = usePathname();
   const { account, profile, isAuthenticated, isLoading, logout } = useAuth();
   const [refreshKey, setRefreshKey] = useState(0);
+  const hideHeader = pathname.startsWith("/contenido/");
 
   useEffect(() => {
     if (isLoading) return;
@@ -62,12 +63,14 @@ export default function BrowseLayout({
 
   return (
     <div className="min-h-screen bg-background" key={refreshKey}>
-      <BrowseHeader
-        activeSection={getActiveSection()}
-        account={account}
-        onLogout={handleLogout}
-        onProfileChanged={handleProfileChanged}
-      />
+      {!hideHeader && (
+        <BrowseHeader
+          activeSection={getActiveSection()}
+          account={account}
+          onLogout={handleLogout}
+          onProfileChanged={handleProfileChanged}
+        />
+      )}
       <main>{children}</main>
     </div>
   );

@@ -60,6 +60,7 @@ class VideoSourceDTO(BaseModel):
     file_id: str
     mime_type: str
     filename: str
+    quality: str | None = None
 
 
 def _variant_uploads_to_payload(variants) -> dict[str, dict]:
@@ -342,6 +343,7 @@ class ContenidoService:
         contenido_id: int,
         quality: str | None = None,
         perfil_id: int | None = None,
+        max_quality: str | None = None,
     ) -> VideoSourceDTO:
         contenido = self.contenido_repo.find_by_id(contenido_id)
         if not contenido:
@@ -350,12 +352,13 @@ class ContenidoService:
             self._validate_profile_can_access_content(perfil_id, contenido)
         if contenido.tipo != "pelicula":
             raise ConflictError("Las series se reproducen por episodio")
-        variant = self._select_video_variant(contenido.video_variants, quality)
+        variant = self._select_video_variant(contenido.video_variants, quality, max_quality)
         if variant:
             return VideoSourceDTO(
                 file_id=variant.video_storage_key,
                 mime_type=variant.video_mime or "video/mp4",
                 filename=contenido.titulo,
+                quality=variant.quality,
             )
         if quality and contenido.video_variants:
             raise NotFoundError("No hay video cargado para esa calidad")
@@ -405,12 +408,20 @@ class ContenidoService:
         if not content_type.startswith("video/"):
             raise ConflictError("El archivo debe ser un video")
 
-    def _select_video_variant(self, variants, quality: str | None):
+    def _select_video_variant(self, variants, quality: str | None, max_quality: str | None = None):
         if not variants:
             return None
+        max_rank = QUALITY_PRIORITY.get(max_quality, 999) if max_quality else 999
         if quality:
+            if QUALITY_PRIORITY.get(quality, 0) > max_rank:
+                raise ForbiddenError("El plan no permite reproducir esa calidad")
             return next((variant for variant in variants if variant.quality == quality), None)
-        return sorted(variants, key=lambda variant: QUALITY_PRIORITY.get(variant.quality, 0), reverse=True)[0]
+        allowed_variants = [
+            variant for variant in variants if QUALITY_PRIORITY.get(variant.quality, 0) <= max_rank
+        ]
+        if not allowed_variants:
+            return None
+        return sorted(allowed_variants, key=lambda variant: QUALITY_PRIORITY.get(variant.quality, 0), reverse=True)[0]
 
     def _store_portada(self, portada_file: UploadFile, contenido_id: int) -> str:
         return StorageService().upload_asset_file(
@@ -542,16 +553,23 @@ class EpisodioService:
             video_size=video.size,
             thumbnail_url=None,
         )
-        thumbnail_url = self._store_episode_thumbnail(
-            processed_video=processed_video,
-            episodio_id=episodio.id,
-            temporada=temporada,
-        )
-        episodio = self.episodio_repo.update(episodio.id, thumbnail_url=thumbnail_url) or episodio
+
         self.video_variant_repo.replace_for_episodio(
             episodio_id=episodio.id,
             variants=_variant_uploads_to_payload(processed_video.variants),
         )
+        try:
+            thumbnail_url = self._store_episode_thumbnail(
+                processed_video=processed_video,
+                episodio_id=episodio.id,
+                temporada=temporada,
+            )
+        except Exception:
+            thumbnail_url = None
+        if thumbnail_url:
+            episodio = self.episodio_repo.update(episodio.id, thumbnail_url=thumbnail_url) or episodio
+        episodio = self.episodio_repo.find_by_id(episodio.id) or episodio
+
         response = to_episodio_response(episodio)
         response.processing_warning = _processing_warning(
             processed_video.source_quality,
@@ -654,6 +672,7 @@ class EpisodioService:
         episodio_id: int,
         quality: str | None = None,
         perfil_id: int | None = None,
+        max_quality: str | None = None,
     ) -> VideoSourceDTO:
         episodio = self.episodio_repo.find_by_id(episodio_id)
         if not episodio:
@@ -665,12 +684,13 @@ class EpisodioService:
             contenido = episodio.temporada.contenido
             if perfil.es_infantil and contenido.clasificacion_edad != "ATP":
                 raise ForbiddenError("El perfil infantil no puede reproducir este contenido")
-        variant = self._select_video_variant(episodio.video_variants, quality)
+        variant = self._select_video_variant(episodio.video_variants, quality, max_quality)
         if variant:
             return VideoSourceDTO(
                 file_id=variant.video_storage_key,
                 mime_type=variant.video_mime or "video/mp4",
                 filename=episodio.titulo,
+                quality=variant.quality,
             )
         if quality and episodio.video_variants:
             raise NotFoundError("No hay video cargado para esa calidad")
@@ -688,12 +708,20 @@ class EpisodioService:
         if not content_type.startswith("video/"):
             raise ConflictError("El archivo debe ser un video")
 
-    def _select_video_variant(self, variants, quality: str | None):
+    def _select_video_variant(self, variants, quality: str | None, max_quality: str | None = None):
         if not variants:
             return None
+        max_rank = QUALITY_PRIORITY.get(max_quality, 999) if max_quality else 999
         if quality:
+            if QUALITY_PRIORITY.get(quality, 0) > max_rank:
+                raise ForbiddenError("El plan no permite reproducir esa calidad")
             return next((variant for variant in variants if variant.quality == quality), None)
-        return sorted(variants, key=lambda variant: QUALITY_PRIORITY.get(variant.quality, 0), reverse=True)[0]
+        allowed_variants = [
+            variant for variant in variants if QUALITY_PRIORITY.get(variant.quality, 0) <= max_rank
+        ]
+        if not allowed_variants:
+            return None
+        return sorted(allowed_variants, key=lambda variant: QUALITY_PRIORITY.get(variant.quality, 0), reverse=True)[0]
 
     def _store_episode_thumbnail(self, processed_video, episodio_id: int, temporada) -> str | None:
         if not processed_video.thumbnail:
@@ -726,6 +754,11 @@ class VistaService:
 
     def update(self, dto: CreateVistaDTO) -> VistaResponseDTO:
         return self.create_or_update(dto)
+
+    def list_by_perfil(self, perfil_id: int) -> list[VistaResponseDTO]:
+        if not self.perfil_repo.find_by_id(perfil_id):
+            raise NotFoundError("Perfil no encontrado")
+        return to_vista_response_list(self.vista_repo.list_by_perfil(perfil_id))
 
     def create_or_update(self, dto: CreateVistaDTO) -> VistaResponseDTO:
         perfil = self.perfil_repo.find_by_id(dto.perfil_id)
@@ -811,31 +844,14 @@ class VistaService:
                 continue
 
             seen_content_ids.add(contenido.id)
-            next_episode = episodio
-            if contenido.tipo == "serie":
-                episodios = [
-                    ep
-                    for temporada in sorted(contenido.temporadas, key=lambda t: t.numero)
-                    for ep in sorted(temporada.episodios, key=lambda e: e.numero)
-                ]
-                finished_episode_ids = {
-                    v.episodio_id
-                    for v in self.vista_repo.list_by_perfil(perfil_id)
-                    if v.episodio_id is not None and v.terminado
-                }
-                next_episode = next(
-                    (ep for ep in episodios if ep.id not in finished_episode_ids),
-                    episodio,
-                )
-
             items.append(
                 ContinuarViendoResponseDTO(
                     contenido=to_contenido_response(contenido),
-                    episodio=to_episodio_response(next_episode) if next_episode else None,
-                    temporada=to_temporada_response(next_episode.temporada) if next_episode else None,
+                    episodio=to_episodio_response(episodio) if episodio else None,
+                    temporada=to_temporada_response(episodio.temporada) if episodio else None,
                     segundos_vistos=vista.segundos_vistos,
                     duracion_total=int(
-                        (next_episode.duracion_min if next_episode else contenido.duracion_min or 0) * 60
+                        (episodio.duracion_min if episodio else contenido.duracion_min or 0) * 60
                     ),
                     terminado=vista.terminado,
                     actualizado_en=vista.fecha,
@@ -1052,6 +1068,16 @@ class CalificacionService:
             puntaje=dto.puntaje,
         )
         return to_calificacion_response(calif)
+
+    def get(self, perfil_id: int, contenido_id: int) -> CalificacionResponseDTO:
+        if not self.perfil_repo.find_by_id(perfil_id):
+            raise NotFoundError("Perfil no encontrado")
+        if not self.contenido_repo.find_by_id(contenido_id):
+            raise NotFoundError("Contenido no encontrado")
+        calificacion = self.calificacion_repo.find_by_perfil_and_contenido(perfil_id, contenido_id)
+        if not calificacion:
+            raise NotFoundError("Calificacion no encontrada")
+        return to_calificacion_response(calificacion)
 
     def create(self, dto: CreateCalificacionDTO) -> CalificacionResponseDTO:
         return self.create_or_update(dto)

@@ -36,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStoredAccount({
         id: currentAccount.id,
         email: currentAccount.email,
+        plan: currentAccount.plan,
         is_admin: currentAccount.is_admin,
       });
       
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStoredAccount({
       id: newAccount.id,
       email: newAccount.email,
+      plan: newAccount.plan,
       is_admin: newAccount.is_admin,
     });
   }, []);

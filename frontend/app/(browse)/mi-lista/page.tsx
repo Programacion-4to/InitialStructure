@@ -1,44 +1,51 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { X, Film, Tv, List, Loader2 } from "lucide-react";
-import { apiRequest, getSelectedProfile, getAssetUrl } from "@/lib/api";
-import type { Contenido, MiListaItem } from "@/lib/types";
+import { apiRequest, getAssetUrl } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import type { Contenido } from "@/lib/types";
 
 export default function MiListaPage() {
   const [miLista, setMiLista] = useState<Contenido[]>([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<number | null>(null);
-
-  const profile = getSelectedProfile();
-
-  const fetchMiLista = useCallback(async () => {
-    if (!profile?.id) {
-      setLoading(false);
-      return;
-    }
-    try {
-      // HU8: GET /perfiles/{id}/mi-lista — respects infantil restriction via perfil_id on the backend
-      const lista = await apiRequest<MiListaItem[]>(`/perfiles/${profile.id}/mi-lista`);
-      setMiLista(lista.filter((item) => item.contenido).map((item) => item.contenido as Contenido));
-    } catch {
-      setMiLista([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [profile?.id]);
+  const { profile } = useAuth();
+  const profileId = profile?.id;
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchMiLista() {
+      if (!profileId) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        // HU8: GET /perfiles/{id}/mi-lista — respects infantil restriction via perfil_id on the backend
+        const lista = await apiRequest<Contenido[]>(`/perfiles/${profileId}/mi-lista`);
+        if (!cancelled) setMiLista(lista);
+      } catch {
+        if (!cancelled) setMiLista([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     fetchMiLista();
-  }, [fetchMiLista]);
+    return () => {
+      cancelled = true;
+    };
+  }, [profileId]);
 
   // HU8: remove item from Mi Lista
   const handleRemove = async (contenidoId: number) => {
-    if (!profile?.id) return;
+    if (!profileId) return;
     setRemovingId(contenidoId);
     try {
-      await apiRequest(`/perfiles/${profile.id}/mi-lista/${contenidoId}`, { method: "DELETE" });
+      await apiRequest(`/perfiles/${profileId}/mi-lista/${contenidoId}`, { method: "DELETE" });
       setMiLista((prev) => prev.filter((c) => c.id !== contenidoId));
     } catch {
       // Keep item in list if removal failed

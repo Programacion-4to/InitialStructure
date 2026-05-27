@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Film, Tv } from "lucide-react";
+import { Play, Film, Tv, Star } from "lucide-react";
 import { getAssetUrl } from "@/lib/api";
 import type { Contenido } from "@/lib/types";
 
@@ -11,6 +11,7 @@ interface ContentCardProps {
 
 export function ContentCard({ content, onClick }: ContentCardProps) {
   const portadaUrl = getAssetUrl(content.portada_url);
+  const averageRating = content.promedio_calificaciones ?? content.promedio_calificacion;
   const cardClassName =
     "group flex-shrink-0 w-40 md:w-48 lg:w-56 focus:outline-none";
 
@@ -66,6 +67,12 @@ export function ContentCard({ content, onClick }: ContentCardProps) {
           {content.generos && content.generos.length > 0 && (
             <span className="text-xs text-muted-foreground truncate">
               {content.generos.slice(0, 2).map((g) => g.nombre).join(", ")}
+            </span>
+          )}
+          {averageRating !== undefined && averageRating > 0 && (
+            <span className="ml-auto flex items-center gap-1 text-xs text-yellow-500">
+              <Star size={12} fill="currentColor" />
+              {averageRating.toFixed(1)}
             </span>
           )}
         </div>

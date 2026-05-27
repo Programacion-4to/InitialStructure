@@ -1,4 +1,5 @@
 from sqlalchemy import case, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, aliased
 
 from src.db import Calificacion, Contenido, Descarga, Episodio, Genero, Perfil, Temporada, VideoVariant, Vista
@@ -517,7 +518,21 @@ class VistaRepository:
         vista.terminado = terminado
         vista.fecha = func.now()
 
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            vista = self.find_existing(
+                perfil_id=perfil_id,
+                episodio_id=episodio_id,
+                contenido_id=contenido_id,
+            )
+            if vista is None:
+                raise
+            vista.segundos_vistos = segundos_vistos
+            vista.terminado = terminado
+            vista.fecha = func.now()
+            self.db.commit()
         self.db.refresh(vista)
         return vista
 

@@ -35,6 +35,26 @@ export function getDirectApiUrl(path: string): string {
   return `${DIRECT_API_BASE_URL}${path}`;
 }
 
+function getUploadApiUrl(path: string): string {
+  if (typeof window !== "undefined") {
+    try {
+      const directUrl = new URL(DIRECT_API_BASE_URL, window.location.origin);
+      const directHost = directUrl.hostname;
+      const pageHost = window.location.hostname;
+      const directIsLocalhost = directHost === "localhost" || directHost === "127.0.0.1";
+      const pageIsLocalhost = pageHost === "localhost" || pageHost === "127.0.0.1";
+
+      if (directIsLocalhost && !pageIsLocalhost) {
+        return getApiUrl(path);
+      }
+    } catch {
+      return getApiUrl(path);
+    }
+  }
+
+  return getDirectApiUrl(path);
+}
+
 export function getBackendUrl(path: string): string {
   // Handle relative stream URLs
   if (path.startsWith("http")) {
@@ -70,7 +90,12 @@ export async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const isFormData = options.body instanceof FormData;
-  const url = getApiUrl(path);
+  const hasVideoUpload =
+    isFormData &&
+    Array.from((options.body as FormData).entries()).some(([fieldName, value]) => {
+      return fieldName === "video" && typeof File !== "undefined" && value instanceof File && value.size > 0;
+    });
+  const url = hasVideoUpload ? getUploadApiUrl(path) : getApiUrl(path);
   const hasBody = options.body !== undefined && options.body !== null;
   const headers: HeadersInit = {
     ...getAuthHeaders(),
@@ -165,6 +190,7 @@ export async function register(email: string, password: string, plan: "basico" |
 export type StoredAccount = {
   id?: number;
   email: string;
+  plan?: "basico" | "estandar" | "premium";
   is_admin: boolean;
 };
 
@@ -282,9 +308,15 @@ export async function getCalificacion(perfilId: number, contenidoId: number): Pr
 }
 
 export async function setCalificacion(perfilId: number, contenidoId: number, puntaje: number): Promise<Calificacion> {
-  return await apiRequest<Calificacion>(`/perfiles/${perfilId}/calificaciones`, {
+  return await apiRequest<Calificacion>(`/perfiles/${perfilId}/calificaciones/${contenidoId}`, {
     method: "POST",
-    body: JSON.stringify({ contenido_id: contenidoId, puntaje }),
+    body: JSON.stringify({ puntaje }),
+  });
+}
+
+export async function deleteCalificacion(perfilId: number, contenidoId: number): Promise<void> {
+  await apiRequest(`/perfiles/${perfilId}/calificaciones/${contenidoId}`, {
+    method: "DELETE",
   });
 }
 

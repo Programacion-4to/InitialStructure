@@ -36,6 +36,7 @@ class AuthService:
             id=cuenta.id,
             is_admin=bool(cuenta.is_admin),
             email=cuenta.email,
+            plan=cuenta.plan,
         )
 
     def admin_login(self, dto: AdminLoginDTO) -> TokenDTO:
@@ -71,6 +72,7 @@ class AuthService:
             id=cuenta.id,
             is_admin=True,
             email=cuenta.email,
+            plan=cuenta.plan,
         )
 
     def get_current_account(self, cuenta_id: int) -> AuthAccountDTO:

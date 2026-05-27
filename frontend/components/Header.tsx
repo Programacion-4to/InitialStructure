@@ -42,7 +42,7 @@ export function Header({ activeSection, account, onNavigate, onLogout, onProfile
   const [message, setMessage] = useState<string | null>(null);
 
   const currentProfile = profiles.find((profile) => profile.id === selectedProfile?.id) || selectedProfile;
-  const canCreateProfile = profiles.length < planLimits[account.plan || ""] || !account.plan;
+  const canCreateProfile = profiles.length < planLimits[account.plan || "basico"];
 
   const loadProfiles = async () => {
     const data = await apiRequest<Profile[]>(`/cuentas/${account.id}/perfiles`);

@@ -36,7 +36,7 @@ const planLimits: Record<string, number> = {
 
 export function BrowseHeader({ activeSection, account, onLogout, onProfileChanged }: BrowseHeaderProps) {
   const router = useRouter();
-  const { selectProfile } = useAuth();
+  const { refreshAccount, selectProfile } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -48,7 +48,7 @@ export function BrowseHeader({ activeSection, account, onLogout, onProfileChange
   const [message, setMessage] = useState<string | null>(null);
 
   const currentProfile = profiles.find((profile) => profile.id === selectedProfileState?.id) || selectedProfileState;
-  const canCreateProfile = profiles.length < planLimits[account.plan || ""] || !account.plan;
+  const canCreateProfile = profiles.length < planLimits[account.plan || "basico"];
 
   const loadProfiles = async () => {
     const data = await apiRequest<Profile[]>(`/cuentas/${account.id}/perfiles`);
@@ -283,9 +283,10 @@ export function BrowseHeader({ activeSection, account, onLogout, onProfileChange
         <PlanUpgradeModal
           account={account}
           onClose={() => setUpgradeOpen(false)}
-          onUpgraded={() => {
+          onUpgraded={async () => {
             setUpgradeOpen(false);
-            window.location.reload();
+            await refreshAccount();
+            onProfileChanged();
           }}
         />
       )}
