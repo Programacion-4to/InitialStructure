@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Film, Loader2, LogOut, Play, Plus, RefreshCw, ShieldCheck, Tv, Upload } from "lucide-react";
+import { BarChart3, Film, Loader2, LogOut, Play, Plus, RefreshCw, ShieldCheck, Trash2, Tv, Upload } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { apiRequest, getAssetUrl, getBackendUrl, logout, MAX_UPLOAD_SIZE, getReporteVisualizacion, type ReporteVisualizacion } from "@/lib/api";
 import type { AuthAccount, Contenido, Episodio, Genero, PlaybackResponse, Temporada, VideoVariant } from "@/lib/types";
@@ -64,6 +64,7 @@ export function AdminDashboard({ account, onLogout }: AdminDashboardProps) {
   const [reporte, setReporte] = useState<ReporteVisualizacion | null>(null);
   const [reporteLoading, setReporteLoading] = useState(false);
   const [permissionSavingId, setPermissionSavingId] = useState<number | null>(null);
+  const [accountDeletingId, setAccountDeletingId] = useState<number | null>(null);
   const isRootAdmin = account.id === ROOT_ADMIN_ID;
 
   const selectedContenido = useMemo(
@@ -580,6 +581,27 @@ export function AdminDashboard({ account, onLogout }: AdminDashboardProps) {
       setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo cambiar el permiso" });
     } finally {
       setPermissionSavingId(null);
+    }
+  };
+
+  const handleAdminDeleteAccount = async (target: AuthAccount) => {
+    if (target.id === ROOT_ADMIN_ID) {
+      setMessage({ type: "error", text: "No se puede eliminar el admin principal" });
+      return;
+    }
+
+    const confirmed = window.confirm(`Eliminar la cuenta ${target.email}? Se borraran sus perfiles y esta accion no se puede deshacer.`);
+    if (!confirmed) return;
+
+    setAccountDeletingId(target.id);
+    try {
+      await apiRequest(`/cuentas/${target.id}`, { method: "DELETE" });
+      setCuentas((current) => current.filter((cuenta) => cuenta.id !== target.id));
+      showOk(`Cuenta ${target.email} eliminada`);
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "No se pudo eliminar la cuenta" });
+    } finally {
+      setAccountDeletingId(null);
     }
   };
 
@@ -1209,6 +1231,7 @@ export function AdminDashboard({ account, onLogout }: AdminDashboardProps) {
                 {cuentas.map((cuenta) => {
                   const isPrincipal = cuenta.id === ROOT_ADMIN_ID;
                   const saving = permissionSavingId === cuenta.id;
+                  const deleting = accountDeletingId === cuenta.id;
 
                   return (
                     <div
@@ -1231,17 +1254,28 @@ export function AdminDashboard({ account, onLogout }: AdminDashboardProps) {
                         </p>
                       </div>
 
-                      <label className="flex shrink-0 items-center gap-2 text-sm font-medium text-foreground">
-                        {saving ? <Loader2 size={16} className="animate-spin text-muted-foreground" /> : null}
-                        <input
-                          type="checkbox"
-                          checked={cuenta.is_admin}
-                          disabled={saving || isPrincipal}
-                          onChange={(event) => handleAdminPermissionChange(cuenta, event.target.checked)}
-                          className="h-5 w-5 accent-[var(--primary)] disabled:opacity-50"
-                        />
-                        Puede administrar
-                      </label>
+                      <div className="flex shrink-0 flex-wrap items-center gap-3">
+                        <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                          {saving ? <Loader2 size={16} className="animate-spin text-muted-foreground" /> : null}
+                          <input
+                            type="checkbox"
+                            checked={cuenta.is_admin}
+                            disabled={saving || deleting || isPrincipal}
+                            onChange={(event) => handleAdminPermissionChange(cuenta, event.target.checked)}
+                            className="h-5 w-5 accent-[var(--primary)] disabled:opacity-50"
+                          />
+                          Puede administrar
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleAdminDeleteAccount(cuenta)}
+                          disabled={saving || deleting || isPrincipal}
+                          className="inline-flex items-center gap-2 rounded-md border border-primary/60 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+                        >
+                          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          Eliminar cuenta
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

@@ -223,7 +223,7 @@ class Descarga(Base):
     vence_en = Column(DateTime, nullable=False)
     eliminada = Column(Boolean, default=False, nullable=False)
 
-    perfil = relationship("Perfil")
+    perfil = relationship("Perfil", back_populates="descargas")
     episodio = relationship("Episodio")
     contenido = relationship("Contenido")
 

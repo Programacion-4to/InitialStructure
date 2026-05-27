@@ -41,6 +41,7 @@ class Perfil(Base):                                           # Modelo de datos 
         back_populates="perfil",
         cascade="all, delete-orphan",
     )
+    descargas = relationship("Descarga", back_populates="perfil", cascade="all, delete-orphan")
     mi_lista = relationship(                                  # Relación N:M con Contenido ("Mi lista")
         "Contenido",
         secondary="mi_lista",

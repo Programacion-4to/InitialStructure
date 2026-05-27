@@ -91,6 +91,16 @@ export interface PlaybackResponse {
   stream_url: string;
 }
 
+export interface Descarga {
+  id: number;
+  perfil_id: number;
+  episodio_id?: number | null;
+  contenido_id?: number | null;
+  fecha_descarga?: string | null;
+  vence_en: string;
+  eliminada: boolean;
+}
+
 export interface AuthResponse {
   access_token: string;
   token_type: string;

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Play, Plus, Check, Star, Loader2, Film, Tv } from "lucide-react";
-import { apiRequest, getSelectedProfile, getBackendUrl, getAssetUrl } from "@/lib/api";
-import type { Contenido, Temporada, Episodio, PlaybackResponse, VideoVariant } from "@/lib/types";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { X, Play, Plus, Check, Star, Loader2, Film, Tv, Download } from "lucide-react";
+import { apiRequest, downloadFile, getSelectedProfile, getStoredAccount, getBackendUrl, getAssetUrl } from "@/lib/api";
+import type { Contenido, Temporada, Episodio, PlaybackResponse, VideoVariant, Descarga } from "@/lib/types";
 
 interface ContentDetailProps {
   content: Contenido;
@@ -19,14 +19,30 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
   const [playLoading, setPlayLoading] = useState<string | null>(null);
   const [inMiLista, setInMiLista] = useState(false);
   const [miListaLoading, setMiListaLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState<string | null>(null);
+  const [downloadMessage, setDownloadMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  const [downloadUsage, setDownloadUsage] = useState(0);
   const [selectedMovieQuality, setSelectedMovieQuality] = useState("");
   const [selectedEpisodeQualities, setSelectedEpisodeQualities] = useState<Record<number, string>>({});
 
-  const profile = getSelectedProfile();
+  const profile = useMemo(() => getSelectedProfile(), []);
+  const account = useMemo(() => getStoredAccount(), []);
+  const downloadLimit = DOWNLOAD_LIMITS[account?.plan || "basico"];
+
+  const refreshDownloadUsage = useCallback(async () => {
+    if (!profile) return;
+    try {
+      const descargas = await apiRequest<Descarga[]>(`/perfiles/${profile.id}/descargas`);
+      setDownloadUsage(descargas.length);
+    } catch {
+      setDownloadUsage(0);
+    }
+  }, [profile]);
 
   // Fetch temporadas for series
   useEffect(() => {
-    if (content.tipo === "serie") {
+    const timer = window.setTimeout(() => {
+      if (content.tipo !== "serie") return;
       setLoading(true);
       apiRequest<Temporada[]>(`/contenidos/${content.id}/temporadas`)
         .then((data) => {
@@ -37,18 +53,23 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
         })
         .catch(() => setTemporadas([]))
         .finally(() => setLoading(false));
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [content]);
 
   // Fetch episodios when temporada changes
   useEffect(() => {
-    if (selectedTemporada) {
+    const timer = window.setTimeout(() => {
+      if (!selectedTemporada) return;
       setLoading(true);
       apiRequest<Episodio[]>(`/temporadas/${selectedTemporada.id}/episodios`)
         .then((data) => setEpisodios(data))
         .catch(() => setEpisodios([]))
         .finally(() => setLoading(false));
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [selectedTemporada]);
 
   // Check if content is in Mi Lista
@@ -62,6 +83,15 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
         .catch(() => {});
     }
   }, [content, profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const timer = window.setTimeout(() => {
+      refreshDownloadUsage();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [profile, refreshDownloadUsage]);
 
   const movieQualities = qualityOptions(content.video_variants);
   const portadaUrl = getAssetUrl(content.portada_url);
@@ -123,6 +153,62 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
       console.error("Error toggling Mi Lista:", error);
     } finally {
       setMiListaLoading(false);
+    }
+  };
+
+  const handleDownloadMovie = async () => {
+    if (!profile) return;
+    const quality = selectedMovieQuality || movieQualities[0] || "";
+    await handleDownload({
+      key: "movie",
+      payload: { contenido_id: content.id },
+      downloadPath: `/contenidos/${content.id}/download${quality ? `?quality=${encodeURIComponent(quality)}` : ""}`,
+      fallbackFilename: `${content.titulo}.${quality || "video"}`,
+    });
+  };
+
+  const handleDownloadEpisode = async (episodio: Episodio) => {
+    if (!profile) return;
+    const qualities = qualityOptions(episodio.video_variants);
+    const quality = selectedEpisodeQualities[episodio.id] || qualities[0] || "";
+    await handleDownload({
+      key: `ep-${episodio.id}`,
+      payload: { episodio_id: episodio.id },
+      downloadPath: `/episodios/${episodio.id}/download${quality ? `?quality=${encodeURIComponent(quality)}` : ""}`,
+      fallbackFilename: `${content.titulo}-T${selectedTemporada?.numero || 1}-E${episodio.numero}.${quality || "video"}`,
+    });
+  };
+
+  const handleDownload = async ({
+    key,
+    payload,
+    downloadPath,
+    fallbackFilename,
+  }: {
+    key: string;
+    payload: { contenido_id?: number; episodio_id?: number };
+    downloadPath: string;
+    fallbackFilename: string;
+  }) => {
+    if (!profile) return;
+
+    setDownloadLoading(key);
+    setDownloadMessage(null);
+    try {
+      await apiRequest<Descarga>(`/perfiles/${profile.id}/descargas`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      await downloadFile(downloadPath, fallbackFilename);
+      await refreshDownloadUsage();
+      setDownloadMessage({ type: "ok", text: "Descarga iniciada." });
+    } catch (error) {
+      setDownloadMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "No se pudo iniciar la descarga.",
+      });
+    } finally {
+      setDownloadLoading(null);
     }
   };
 
@@ -211,7 +297,7 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
           )}
 
           {/* Action buttons */}
-          <div className="flex gap-3 mb-6">
+          <div className="flex flex-wrap gap-3 mb-3">
             {content.tipo === "pelicula" && (
               <div className="flex flex-wrap gap-3">
                 <button
@@ -240,6 +326,18 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
                     ))}
                   </select>
                 )}
+                <button
+                  onClick={handleDownloadMovie}
+                  disabled={downloadLoading === "movie" || downloadLimit === 0}
+                  className="flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground font-semibold rounded-lg hover:bg-secondary/80 transition-colors border border-border disabled:opacity-50"
+                >
+                  {downloadLoading === "movie" ? (
+                    <Loader2 size={20} className="animate-spin" />
+                  ) : (
+                    <Download size={20} />
+                  )}
+                  Descargar
+                </button>
               </div>
             )}
             <button
@@ -256,6 +354,19 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
               )}
               {inMiLista ? "En Mi lista" : "Mi lista"}
             </button>
+          </div>
+          <div className="mb-6 min-h-6 text-sm">
+            <span className="text-muted-foreground">
+              Descargas del plan: {downloadUsage}/{downloadLimit}
+            </span>
+            {downloadLimit === 0 && (
+              <span className="ml-2 text-primary">Mejora tu plan para descargar.</span>
+            )}
+            {downloadMessage && (
+              <p className={downloadMessage.type === "ok" ? "mt-2 text-green-500" : "mt-2 text-destructive"}>
+                {downloadMessage.text}
+              </p>
+            )}
           </div>
 
           {/* Series: Temporadas and Episodios */}
@@ -294,7 +405,7 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
                   {episodios.map((episodio) => (
                     <div
                       key={episodio.id}
-                      className="flex items-center justify-between gap-3 p-4 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                      className="flex flex-wrap items-center justify-between gap-3 p-4 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
                     >
                       {getAssetUrl(episodio.thumbnail_url) ? (
                         <img
@@ -340,17 +451,32 @@ export function ContentDetail({ content, onClose, onPlay }: ContentDetailProps) 
                           ))}
                         </select>
                       )}
-                      <button
-                        onClick={() => handlePlayEpisode(episodio)}
-                        disabled={playLoading === `ep-${episodio.id}`}
-                        className="ml-4 w-10 h-10 flex-shrink-0 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
-                      >
-                        {playLoading === `ep-${episodio.id}` ? (
-                          <Loader2 size={20} className="animate-spin text-primary-foreground" />
-                        ) : (
-                          <Play size={20} fill="white" className="text-primary-foreground ml-0.5" />
-                        )}
-                      </button>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        <button
+                          onClick={() => handleDownloadEpisode(episodio)}
+                          disabled={downloadLoading === `ep-${episodio.id}` || downloadLimit === 0}
+                          className="w-10 h-10 bg-background rounded-full flex items-center justify-center hover:bg-background/80 transition-colors disabled:opacity-50"
+                          aria-label={`Descargar ${episodio.titulo}`}
+                        >
+                          {downloadLoading === `ep-${episodio.id}` ? (
+                            <Loader2 size={18} className="animate-spin text-foreground" />
+                          ) : (
+                            <Download size={18} className="text-foreground" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handlePlayEpisode(episodio)}
+                          disabled={playLoading === `ep-${episodio.id}`}
+                          className="w-10 h-10 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
+                          aria-label={`Reproducir ${episodio.titulo}`}
+                        >
+                          {playLoading === `ep-${episodio.id}` ? (
+                            <Loader2 size={20} className="animate-spin text-primary-foreground" />
+                          ) : (
+                            <Play size={20} fill="white" className="text-primary-foreground ml-0.5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -380,3 +506,9 @@ function qualityOptions(variants: VideoVariant[] | undefined): string[] {
 function qualityRank(quality: string): number {
   return { FHD: 1, QHD: 2, "4K": 3 }[quality] || 0;
 }
+
+const DOWNLOAD_LIMITS: Record<"basico" | "estandar" | "premium", number> = {
+  basico: 0,
+  estandar: 10,
+  premium: 30,
+};

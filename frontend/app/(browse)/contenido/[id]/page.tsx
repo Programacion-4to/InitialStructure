@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Play, Plus, Check, Star, Loader2, Film, Tv } from "lucide-react";
+import { ArrowLeft, Play, Plus, Check, Star, Loader2, Film, Tv, Download } from "lucide-react";
 import { apiRequest, deleteCalificacion, getBackendUrl, getAssetUrl, getCalificacion, setCalificacion } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { BrandLogo } from "@/components/BrandLogo";
 import { StarRating } from "@/components/StarRating";
-import type { Contenido, Temporada, Episodio, PlaybackResponse, VideoVariant, Profile, Vista } from "@/lib/types";
+import type { Contenido, Temporada, Episodio, PlaybackResponse, VideoVariant, Profile, Vista, Descarga } from "@/lib/types";
 
 export default function ContentDetailPage() {
   const params = useParams();
@@ -24,6 +24,9 @@ export default function ContentDetailPage() {
   const [playLoading, setPlayLoading] = useState<string | null>(null);
   const [inMiLista, setInMiLista] = useState(false);
   const [miListaLoading, setMiListaLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState<string | null>(null);
+  const [downloadMessage, setDownloadMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  const [downloadUsage, setDownloadUsage] = useState(0);
   const [selectedMovieQuality, setSelectedMovieQuality] = useState("");
   const [selectedEpisodeQualities, setSelectedEpisodeQualities] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -151,8 +154,27 @@ export default function ContentDetailPage() {
 
   const movieQualities = qualityOptions(content?.video_variants);
   const availableMovieQualities = filterQualitiesForPlan(movieQualities, account?.plan);
+  const downloadLimit = DOWNLOAD_LIMITS[account?.plan || "basico"];
   const portadaUrl = content ? getAssetUrl(content.portada_url) : null;
   const averageRating = content?.promedio_calificaciones ?? content?.promedio_calificacion;
+
+  const refreshDownloadUsage = useCallback(async () => {
+    if (!profile) return;
+    try {
+      const descargas = await apiRequest<Descarga[]>(`/perfiles/${profile.id}/descargas`);
+      setDownloadUsage(descargas.length);
+    } catch {
+      setDownloadUsage(0);
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      refreshDownloadUsage();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [refreshDownloadUsage]);
 
   const handlePlayMovie = async (startAt = 0) => {
     if (!content) return;
@@ -268,6 +290,64 @@ export default function ContentDetailPage() {
       console.error("Error setting rating:", err);
     } finally {
       setRatingLoading(false);
+    }
+  };
+
+  const handleDownloadMovie = async () => {
+    if (!profile || !content) return;
+    const quality = selectedMovieQuality || availableMovieQualities[0] || "";
+    await handleDownload({
+      key: "movie",
+      payload: { contenido_id: content.id },
+      downloadPath: `/contenidos/${content.id}/download${quality ? `?quality=${encodeURIComponent(quality)}` : ""}`,
+      fallbackFilename: `${content.titulo}-${quality || "video"}`,
+    });
+  };
+
+  const handleDownloadEpisode = async (episodio: Episodio) => {
+    if (!profile || !content) return;
+    const availableQualities = filterQualitiesForPlan(qualityOptions(episodio.video_variants), account?.plan);
+    const quality = selectedEpisodeQualities[episodio.id] || availableQualities[0] || "";
+    await handleDownload({
+      key: `ep-${episodio.id}`,
+      payload: { episodio_id: episodio.id },
+      downloadPath: `/episodios/${episodio.id}/download${quality ? `?quality=${encodeURIComponent(quality)}` : ""}`,
+      fallbackFilename: `${content.titulo}-T${selectedTemporada?.numero || 1}-E${episodio.numero}-${quality || "video"}`,
+    });
+  };
+
+  const handleDownload = async ({
+    key,
+    payload,
+    downloadPath,
+    fallbackFilename,
+  }: {
+    key: string;
+    payload: { contenido_id?: number; episodio_id?: number };
+    downloadPath: string;
+    fallbackFilename: string;
+  }) => {
+    if (!profile) return;
+
+    setDownloadLoading(key);
+    setDownloadMessage(null);
+    try {
+      const descarga = await apiRequest<Descarga>(`/perfiles/${profile.id}/descargas`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const ticketPath = buildDownloadTicketPath(downloadPath, profile.id, descarga.id);
+      const ticket = await apiRequest<{ download_url: string }>(ticketPath);
+      startBrowserDownload(ticket.download_url, fallbackFilename);
+      await refreshDownloadUsage();
+      setDownloadMessage({ type: "ok", text: "Descarga iniciada." });
+    } catch (err) {
+      setDownloadMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "No se pudo iniciar la descarga.",
+      });
+    } finally {
+      setDownloadLoading(null);
     }
   };
 
@@ -487,6 +567,18 @@ export default function ContentDetailPage() {
                   ))}
                 </select>
               )}
+              <button
+                onClick={handleDownloadMovie}
+                disabled={downloadLoading === "movie" || downloadLimit === 0}
+                className="flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground font-semibold rounded-lg hover:bg-secondary/80 transition-colors border border-border disabled:opacity-50"
+              >
+                {downloadLoading === "movie" ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <Download size={20} />
+                )}
+                Descargar
+              </button>
             </>
           )}
           <button
@@ -504,6 +596,21 @@ export default function ContentDetailPage() {
             {inMiLista ? "En Mi lista" : "Mi lista"}
           </button>
         </div>
+        {!error && (
+          <div className="mb-8 min-h-6 text-sm">
+            <span className="text-muted-foreground">
+              Descargas del plan: {downloadUsage}/{downloadLimit}
+            </span>
+            {downloadLimit === 0 && (
+              <span className="ml-2 text-primary">Mejora tu plan para descargar.</span>
+            )}
+            {downloadMessage && (
+              <p className={downloadMessage.type === "ok" ? "mt-2 text-green-500" : "mt-2 text-destructive"}>
+                {downloadMessage.text}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Series: Temporadas and Episodios */}
         {content.tipo === "serie" && !error && (
@@ -588,6 +695,19 @@ export default function ContentDetailPage() {
                       </select>
                     )}
                     <div className="ml-2 flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadEpisode(episodio)}
+                        disabled={downloadLoading === `ep-${episodio.id}` || downloadLimit === 0}
+                        className="w-10 h-10 flex-shrink-0 bg-background rounded-full flex items-center justify-center hover:bg-background/80 transition-colors disabled:opacity-50"
+                        aria-label={`Descargar ${episodio.titulo}`}
+                      >
+                        {downloadLoading === `ep-${episodio.id}` ? (
+                          <Loader2 size={18} className="animate-spin text-foreground" />
+                        ) : (
+                          <Download size={18} className="text-foreground" />
+                        )}
+                      </button>
                       {canResume && (
                         <button
                           type="button"
@@ -649,3 +769,26 @@ function filterQualitiesForPlan(qualities: string[], plan: string | undefined): 
   const maxRank = { basico: 1, estandar: 2, premium: 3 }[plan || "basico"] || 1;
   return qualities.filter((quality) => qualityRank(quality) <= maxRank);
 }
+
+function buildDownloadTicketPath(downloadPath: string, profileId: number, descargaId: number): string {
+  const [path, query = ""] = downloadPath.split("?");
+  const params = new URLSearchParams(query);
+  params.set("perfil_id", String(profileId));
+  params.set("descarga_id", String(descargaId));
+  return `${path}-ticket?${params.toString()}`;
+}
+
+function startBrowserDownload(downloadUrl: string, fallbackFilename: string): void {
+  const link = document.createElement("a");
+  link.href = getBackendUrl(downloadUrl);
+  link.download = fallbackFilename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+const DOWNLOAD_LIMITS: Record<"basico" | "estandar" | "premium", number> = {
+  basico: 0,
+  estandar: 10,
+  premium: 30,
+};

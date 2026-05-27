@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 import mimetypes
 import re
 from urllib.parse import quote
@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from src.db import get_db
-from src.db.models import Cuenta, Perfil
+from src.db.models import Cuenta, Descarga, Perfil
 from src.dtos import (
     CreateCalificacionDTO,
     CreateContenidoDTO,
@@ -29,7 +29,12 @@ from src.dtos import (
     ReporteVisualizacionDTO,
 )
 from src.schemas.auth_schema import PerfilAuthResponseSchema, PerfilAuthSchema
-from src.middlewares import get_current_user_from_swagger, get_owned_profile, require_admin
+from src.middlewares import (
+    get_current_user_from_swagger,
+    get_optional_current_user_from_swagger,
+    get_owned_profile,
+    require_admin,
+)
 from src.schemas.product_schema import (
     AddMiListaSchema,
     CreateEpisodioSchema,
@@ -54,7 +59,7 @@ from src.services.product_service import (
 from src.services.auth_service import AuthService
 from src.dtos import UpdateEpisodioDTO, UpdateTemporadaDTO
 from src.services.storage_service import StorageService
-from src.utils import BadRequestError, UnauthorizedError, create_access_token, decode_access_token
+from src.utils import BadRequestError, ForbiddenError, UnauthorizedError, create_access_token, decode_access_token
 
 
 router = APIRouter(tags=["products"])
@@ -107,6 +112,20 @@ def _verify_media_token(
         raise UnauthorizedError("Token de media invalido")
 
 
+def _download_url(
+    resource_type: str,
+    resource_id: int,
+    token: str,
+    quality: str | None,
+) -> str:
+    path = "contenidos" if resource_type == "contenido" else "episodios"
+    return (
+        f"/api/v1/{path}/{resource_id}/download"
+        f"?token={quote(token)}"
+        + (f"&quality={quote(quality)}" if quality else "")
+    )
+
+
 def _stream_storage_video(
     file_id: str,
     mime_type: str,
@@ -139,6 +158,31 @@ def _content_disposition(filename: str, mime_type: str) -> str:
         safe_name = f"{safe_name}{extension}"
     encoded_name = quote(safe_name)
     return f"attachment; filename=\"{safe_name}\"; filename*=UTF-8''{encoded_name}"
+
+
+def _validate_active_download(
+    db: Session,
+    current_user: Cuenta,
+    perfil_id: int,
+    descarga_id: int,
+    contenido_id: int | None = None,
+    episodio_id: int | None = None,
+) -> None:
+    profile = db.query(Perfil).filter(Perfil.id == perfil_id).first()
+    if not profile or (profile.cuenta_id != current_user.id and not current_user.is_admin):
+        raise UnauthorizedError("Perfil no autorizado")
+
+    descarga = db.query(Descarga).filter(Descarga.id == descarga_id).first()
+    if (
+        not descarga
+        or descarga.perfil_id != profile.id
+        or descarga.contenido_id != contenido_id
+        or descarga.episodio_id != episodio_id
+    ):
+        raise UnauthorizedError("Descarga no autorizada")
+
+    if descarga.eliminada or descarga.vence_en <= datetime.utcnow():
+        raise ForbiddenError("La descarga no esta activa")
 
 
 def _vista_dto_from_request(
@@ -330,11 +374,30 @@ def stream_contenido_video(
 def download_contenido_video(
     contenido_id: int,
     request: Request,
+    perfil_id: int | None = None,
+    descarga_id: int | None = None,
+    token: str | None = None,
     quality: str | None = None,
-    _current_user: Cuenta = Depends(get_current_user_from_swagger),
+    current_user: Cuenta | None = Depends(get_optional_current_user_from_swagger),
     db: Session = Depends(get_db),
 ):
-    video = ContenidoService(db).get_video_source(contenido_id, quality)
+    if token:
+        _verify_media_token(token, "contenido", contenido_id, quality, "download")
+    elif perfil_id is not None and descarga_id is not None and current_user is not None:
+        _validate_active_download(
+            db=db,
+            current_user=current_user,
+            perfil_id=perfil_id,
+            descarga_id=descarga_id,
+            contenido_id=contenido_id,
+        )
+    else:
+        raise UnauthorizedError("Descarga no autorizada")
+    video = ContenidoService(db).get_video_source(
+        contenido_id,
+        quality,
+        max_quality=PLAN_MAX_QUALITY.get(current_user.plan, "FHD") if current_user else None,
+    )
     return _stream_storage_video(
         video.file_id,
         video.mime_type,
@@ -342,6 +405,32 @@ def download_contenido_video(
         filename=video.filename,
         as_attachment=True,
     )
+
+
+@router.get("/contenidos/{contenido_id}/download-ticket")
+def get_contenido_download_ticket(
+    contenido_id: int,
+    perfil_id: int,
+    descarga_id: int,
+    quality: str | None = None,
+    current_user: Cuenta = Depends(get_current_user_from_swagger),
+    db: Session = Depends(get_db),
+):
+    _validate_active_download(
+        db=db,
+        current_user=current_user,
+        perfil_id=perfil_id,
+        descarga_id=descarga_id,
+        contenido_id=contenido_id,
+    )
+    video = ContenidoService(db).get_video_source(
+        contenido_id,
+        quality,
+        max_quality=PLAN_MAX_QUALITY.get(current_user.plan, "FHD"),
+    )
+    effective_quality = video.quality or quality
+    token = _create_media_token(current_user, "contenido", contenido_id, effective_quality, "download")
+    return {"download_url": _download_url("contenido", contenido_id, token, effective_quality)}
 
 
 @router.put("/contenidos/{contenido_id}", response_model=ContenidoResponseDTO)
@@ -501,11 +590,30 @@ def stream_episodio_video(
 def download_episodio_video(
     episodio_id: int,
     request: Request,
+    perfil_id: int | None = None,
+    descarga_id: int | None = None,
+    token: str | None = None,
     quality: str | None = None,
-    _current_user: Cuenta = Depends(get_current_user_from_swagger),
+    current_user: Cuenta | None = Depends(get_optional_current_user_from_swagger),
     db: Session = Depends(get_db),
 ):
-    video = EpisodioService(db).get_video_source(episodio_id, quality)
+    if token:
+        _verify_media_token(token, "episodio", episodio_id, quality, "download")
+    elif perfil_id is not None and descarga_id is not None and current_user is not None:
+        _validate_active_download(
+            db=db,
+            current_user=current_user,
+            perfil_id=perfil_id,
+            descarga_id=descarga_id,
+            episodio_id=episodio_id,
+        )
+    else:
+        raise UnauthorizedError("Descarga no autorizada")
+    video = EpisodioService(db).get_video_source(
+        episodio_id,
+        quality,
+        max_quality=PLAN_MAX_QUALITY.get(current_user.plan, "FHD") if current_user else None,
+    )
     return _stream_storage_video(
         video.file_id,
         video.mime_type,
@@ -513,6 +621,32 @@ def download_episodio_video(
         filename=video.filename,
         as_attachment=True,
     )
+
+
+@router.get("/episodios/{episodio_id}/download-ticket")
+def get_episodio_download_ticket(
+    episodio_id: int,
+    perfil_id: int,
+    descarga_id: int,
+    quality: str | None = None,
+    current_user: Cuenta = Depends(get_current_user_from_swagger),
+    db: Session = Depends(get_db),
+):
+    _validate_active_download(
+        db=db,
+        current_user=current_user,
+        perfil_id=perfil_id,
+        descarga_id=descarga_id,
+        episodio_id=episodio_id,
+    )
+    video = EpisodioService(db).get_video_source(
+        episodio_id,
+        quality,
+        max_quality=PLAN_MAX_QUALITY.get(current_user.plan, "FHD"),
+    )
+    effective_quality = video.quality or quality
+    token = _create_media_token(current_user, "episodio", episodio_id, effective_quality, "download")
+    return {"download_url": _download_url("episodio", episodio_id, token, effective_quality)}
 
 
 @router.delete("/episodios/{episodio_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -23,13 +23,13 @@ const PLANS: { id: PlanType; label: string; description: string; features: strin
     id: "estandar",
     label: "Estandar",
     description: "Lo mas popular",
-    features: ["2 perfiles", "Calidad QHD", "Descargas incluidas con tope"],
+    features: ["2 perfiles", "Calidad QHD", "10 descargas activas"],
   },
   {
     id: "premium",
     label: "Premium",
     description: "La mejor experiencia",
-    features: ["5 perfiles", "Calidad 4K + HDR", "Descargas ilimitadas"],
+    features: ["5 perfiles", "Calidad 4K + HDR", "30 descargas activas"],
   },
 ];
 

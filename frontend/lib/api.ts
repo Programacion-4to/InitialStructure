@@ -36,23 +36,29 @@ export function getDirectApiUrl(path: string): string {
 }
 
 function getUploadApiUrl(path: string): string {
-  if (typeof window !== "undefined") {
-    try {
-      const directUrl = new URL(DIRECT_API_BASE_URL, window.location.origin);
-      const directHost = directUrl.hostname;
-      const pageHost = window.location.hostname;
-      const directIsLocalhost = directHost === "localhost" || directHost === "127.0.0.1";
-      const pageIsLocalhost = pageHost === "localhost" || pageHost === "127.0.0.1";
+  return getDirectApiUrl(path);
+}
 
-      if (directIsLocalhost && !pageIsLocalhost) {
-        return getApiUrl(path);
-      }
-    } catch {
-      return getApiUrl(path);
+function isDirectUploadUrl(url: string, path: string): boolean {
+  return url !== getApiUrl(path);
+}
+
+function getVideoUploadSize(body: BodyInit | null | undefined): number {
+  if (!(body instanceof FormData) || typeof File === "undefined") {
+    return 0;
+  }
+
+  for (const [fieldName, value] of body.entries()) {
+    if (fieldName === "video" && value instanceof File) {
+      return value.size || 0;
     }
   }
 
-  return getDirectApiUrl(path);
+  return 0;
+}
+
+function formatMB(bytes: number): number {
+  return Math.round((bytes / 1024 / 1024) * 10) / 10;
 }
 
 export function getBackendUrl(path: string): string {
@@ -96,6 +102,7 @@ export async function apiRequest<T>(
       return fieldName === "video" && typeof File !== "undefined" && value instanceof File && value.size > 0;
     });
   const url = hasVideoUpload ? getUploadApiUrl(path) : getApiUrl(path);
+  const videoUploadSize = hasVideoUpload ? getVideoUploadSize(options.body) : 0;
   const hasBody = options.body !== undefined && options.body !== null;
   const headers: HeadersInit = {
     ...getAuthHeaders(),
@@ -149,8 +156,50 @@ export async function apiRequest<T>(
       headers,
     });
   } catch {
+    if (hasVideoUpload && isDirectUploadUrl(url, path) && videoUploadSize > 95 * 1024 * 1024) {
+      throw new Error(
+        `No se pudo conectar con el endpoint directo de uploads. Este video pesa ${formatMB(videoUploadSize)}MB y Cloudflare suele rechazar cargas cercanas o superiores a 100MB; usa localhost:3000 o configura NEXT_PUBLIC_DIRECT_API_URL con una URL directa al backend.`
+      );
+    }
     throw new Error("No se pudo conectar con el backend. Verifica que Docker esté corriendo y que la app esté configurada para usar la IP del servidor.");
   }
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const error = await response.json().catch(() => null);
+      const detail = Array.isArray(error?.detail)
+        ? error.detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join(". ")
+        : error?.detail;
+      throw new ApiError(error?.message || detail || `Error ${response.status}`, response.status, error);
+    }
+
+    const text = await response.text().catch(() => "");
+    if (hasVideoUpload && response.status === 413 && text.toLowerCase().includes("cloudflare")) {
+      throw new ApiError(
+        `Cloudflare rechazo el video (${formatMB(videoUploadSize)}MB). Para videos grandes hay que subir por localhost:3000 o por un endpoint directo al backend que no pase por Cloudflare.`,
+        response.status,
+      );
+    }
+    throw new ApiError(text.trim() || `Error ${response.status}`, response.status);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return undefined as T;
+  }
+
+  return response.json();
+}
+
+export async function downloadFile(path: string, fallbackFilename = "titoflix-video"): Promise<void> {
+  const response = await fetch(getApiUrl(path), {
+    headers: getAuthHeaders(),
+  });
 
   if (!response.ok) {
     const contentType = response.headers.get("content-type") || "";
@@ -166,16 +215,23 @@ export async function apiRequest<T>(
     throw new ApiError(text.trim() || `Error ${response.status}`, response.status);
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = getFilenameFromDisposition(response.headers.get("content-disposition")) || fallbackFilename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    return undefined as T;
-  }
-
-  return response.json();
+function getFilenameFromDisposition(disposition: string | null): string | null {
+  if (!disposition) return null;
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1].replace(/"/g, ""));
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return filenameMatch?.[1] || null;
 }
 
 // Registration

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Crown, Loader2, Lock, LogOut, Menu, Plus, Search, Settings, X } from "lucide-react";
+import { Check, Crown, Loader2, Lock, LogOut, Menu, Plus, Search, Settings, Trash2, Upload, X } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { PinModal } from "./PinModal";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -36,7 +36,7 @@ const planLimits: Record<string, number> = {
 
 export function BrowseHeader({ activeSection, account, onLogout, onProfileChanged }: BrowseHeaderProps) {
   const router = useRouter();
-  const { refreshAccount, selectProfile } = useAuth();
+  const { refreshAccount, selectProfile, logout: logoutContext } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -273,6 +273,10 @@ export function BrowseHeader({ activeSection, account, onLogout, onProfileChange
           account={account}
           profile={profiles.find((profile) => profile.id === selectedProfileState?.id) || null}
           onClose={() => setSettingsOpen(false)}
+          onDeleted={() => {
+            logoutContext();
+            onLogout();
+          }}
           onSaved={() => {
             loadProfiles().finally(onProfileChanged);
           }}
@@ -382,19 +386,19 @@ const plans = [
     name: "Basico",
     limit: "1 perfil",
     quality: "FHD",
-    description: "Para mirar sin complicarte.",
+    description: "Para mirar sin descargas.",
   },
   {
     id: "estandar",
     name: "Estandar",
-    limit: "2 perfiles",
+    limit: "2 perfiles / 10 descargas",
     quality: "QHD",
     description: "Mas perfiles y mejor calidad.",
   },
   {
     id: "premium",
     name: "Premium",
-    limit: "5 perfiles",
+    limit: "5 perfiles / 30 descargas",
     quality: "4K",
     description: "La experiencia completa.",
   },
@@ -485,11 +489,13 @@ function AccountSettingsModal({
   account,
   profile,
   onClose,
+  onDeleted,
   onSaved,
 }: {
   account: AuthAccount;
   profile: Profile | null;
   onClose: () => void;
+  onDeleted: () => void;
   onSaved: () => void;
 }) {
   const { selectProfile } = useAuth();
@@ -501,17 +507,37 @@ function AccountSettingsModal({
   const [esInfantil, setEsInfantil] = useState(profile?.es_infantil || false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const handleAvatarChange = (file: File | undefined) => {
+  const handleAvatarChange = async (file: File | undefined) => {
     if (!file) return;
     if (file.size > MAX_UPLOAD_SIZE) {
       const allowedMB = Math.round((MAX_UPLOAD_SIZE / 1024 / 1024) * 10) / 10;
       setError(`El archivo es demasiado grande. Tamano maximo: ${allowedMB}MB.`);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => setAvatar(typeof reader.result === "string" ? reader.result : null);
-    reader.readAsDataURL(file);
+    setError(null);
+    try {
+      setAvatar(await cropImageToSquareDataUrl(file));
+    } catch {
+      setError("No se pudo procesar la imagen del avatar");
+    }
+  };
+
+  const deleteAccount = async () => {
+    const confirmed = window.confirm("Eliminar tu cuenta? Se borraran tus perfiles y esta accion no se puede deshacer.");
+    if (!confirmed) return;
+
+    setError(null);
+    setDeleting(true);
+    try {
+      await apiRequest(`/cuentas/${account.id}`, { method: "DELETE" });
+      onDeleted();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar la cuenta");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -599,11 +625,37 @@ function AccountSettingsModal({
                 Es un perfil infantil (solo contenido ATP)
               </label>
             </div>
-            <label className="grid gap-2 text-sm text-foreground">
-              Avatar del perfil
-              <input type="file" accept="image/*" onChange={(event) => handleAvatarChange(event.target.files?.[0])} />
-            </label>
-            {avatar && <img src={getAssetUrl(avatar) || ""} alt="" className="h-20 w-20 rounded-lg object-cover" />}
+            <div className="grid gap-2">
+              <span className="text-sm text-foreground">Avatar del perfil</span>
+              <input
+                id="settings-avatar-input"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(event) => handleAvatarChange(event.target.files?.[0])}
+              />
+              <label
+                htmlFor="settings-avatar-input"
+                className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground transition-colors hover:bg-secondary/80"
+              >
+                <Upload size={16} />
+                Subir foto
+              </label>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/35 p-3">
+              <div className="h-24 w-24 overflow-hidden rounded-lg border border-border bg-secondary">
+                {avatar ? (
+                  <img src={getAssetUrl(avatar) || ""} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                    Avatar
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                La imagen se encuadra automaticamente en formato cuadrado.
+              </p>
+            </div>
           </>
         )}
         {error && <p className="text-sm text-primary">{error}</p>}
@@ -611,9 +663,49 @@ function AccountSettingsModal({
           {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
           Guardar
         </button>
+        <div className="border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={deleteAccount}
+            disabled={saving || deleting}
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-primary/60 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+          >
+            {deleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+            Eliminar cuenta
+          </button>
+        </div>
       </form>
     </Modal>
   );
+}
+
+function cropImageToSquareDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No se pudo leer la imagen"));
+    reader.onload = () => {
+      const source = typeof reader.result === "string" ? reader.result : "";
+      const image = new Image();
+      image.onerror = () => reject(new Error("No se pudo cargar la imagen"));
+      image.onload = () => {
+        const size = Math.min(image.naturalWidth, image.naturalHeight);
+        const sourceX = Math.max(0, (image.naturalWidth - size) / 2);
+        const sourceY = Math.max(0, (image.naturalHeight - size) / 2);
+        const canvas = document.createElement("canvas");
+        canvas.width = 512;
+        canvas.height = 512;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("No se pudo preparar la imagen"));
+          return;
+        }
+        context.drawImage(image, sourceX, sourceY, size, size, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
+      };
+      image.src = source;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
