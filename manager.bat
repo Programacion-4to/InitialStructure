@@ -1,0 +1,314 @@
+@echo off
+setlocal enabledelayedexpansion
+
+cd /d "%~dp0"
+
+:menu
+cls
+echo Titoflix Docker Manager
+echo =======================
+echo.
+echo 1. Iniciar servicios
+echo 2. Ver estado
+echo 3. Ver consola del frontend
+echo 4. Ver consola del backend
+echo 5. Ver consola de postgres
+echo 6. Ver consola de MinIO
+echo 7. Detener servicios
+echo 8. Reconstruir e iniciar
+echo 9. Resetear tablas de Postgres y buckets de MinIO
+echo 10. Iniciar tunel de Cloudflare
+echo 11. Ver estado/logs del tunel
+echo 12. Detener tunel de Cloudflare
+echo 13. Actualizar token de Cloudflare
+echo 14. Actualizar desde Git y reiniciar
+echo 15. Auto-actualizar desde Git
+echo 0. Salir
+echo.
+set /p option=Elegi una opcion: 
+
+if "%option%"=="1" goto start
+if "%option%"=="2" goto status
+if "%option%"=="3" goto logs_frontend
+if "%option%"=="4" goto logs_backend
+if "%option%"=="5" goto logs_postgres
+if "%option%"=="6" goto logs_minio
+if "%option%"=="7" goto stop
+if "%option%"=="8" goto rebuild
+if "%option%"=="9" goto reset_db
+if "%option%"=="10" goto start_tunnel
+if "%option%"=="11" goto tunnel_logs
+if "%option%"=="12" goto stop_tunnel
+if "%option%"=="13" goto update_tunnel_token
+if "%option%"=="14" goto update_from_git
+if "%option%"=="15" goto auto_update_from_git
+if "%option%"=="0" goto end
+goto menu
+
+:start
+call :ensure_env
+if errorlevel 1 (
+    pause
+    goto menu
+)
+call :write_host_ip
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose up -d
+pause
+goto menu
+
+:status
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose ps
+pause
+goto menu
+
+:logs_frontend
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose logs -f frontend
+goto menu
+
+:logs_backend
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose logs -f backend
+goto menu
+
+:logs_postgres
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose logs -f postgres
+goto menu
+
+:logs_minio
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose logs -f minio
+goto menu
+
+:stop
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose down
+pause
+goto menu
+
+:rebuild
+call :ensure_env
+if errorlevel 1 (
+    pause
+    goto menu
+)
+call :write_host_ip
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose down --remove-orphans
+if errorlevel 1 goto rebuild_failed
+docker compose build --no-cache frontend backend
+if errorlevel 1 goto rebuild_failed
+docker compose up -d --force-recreate
+if errorlevel 1 goto rebuild_failed
+pause
+goto menu
+
+
+call :write_host_ip
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker compose build --no-cache frontend
+if errorlevel 1 goto rebuild_failed
+docker compose up -d --no-deps --force-recreate frontend
+if errorlevel 1 goto rebuild_failed
+pause
+goto menu
+
+:rebuild_failed
+echo.
+echo No se pudo reconstruir o iniciar Titoflix. Revisa el error anterior.
+pause
+goto menu
+
+:reset_db
+call :ensure_env
+if errorlevel 1 (
+    pause
+    goto menu
+)
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+echo.
+echo Esto elimina y vuelve a crear todas las tablas de Postgres.
+echo Tambien elimina y recrea el bucket titoflix-media de MinIO.
+set /p confirm=Escribi RESET para confirmar: 
+if not "%confirm%"=="RESET" goto menu
+docker compose exec backend python -c "from src.db import reset_database; reset_database()"
+docker compose run --rm --entrypoint /bin/sh minio-init -c "until mc alias set local http://minio:9000 titoflix titoflix-secret; do sleep 2; done && mc rb --force local/titoflix-media || true && mc mb --ignore-existing local/titoflix-media"
+pause
+goto menu
+
+:start_tunnel
+call :ensure_env
+if errorlevel 1 (
+    pause
+    goto menu
+)
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+call :write_host_ip
+docker compose up -d
+if errorlevel 1 (
+    pause
+    goto menu
+)
+call :wait_frontend_origin
+if errorlevel 1 (
+    pause
+    goto menu
+)
+call :load_tunnel_token
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker rm -f titoflix-cloudflared-tunnel >nul 2>nul
+docker run -d --name titoflix-cloudflared-tunnel --restart unless-stopped cloudflare/cloudflared:latest tunnel --no-autoupdate --protocol http2 run --token "%CLOUDFLARE_TUNNEL_TOKEN%"
+echo.
+echo Espera unos segundos. El conector deberia aparecer como Healthy en Cloudflare Zero Trust.
+timeout /t 6 /nobreak >nul
+docker logs titoflix-cloudflared-tunnel
+docker logs titoflix-cloudflared-tunnel 2>&1 | findstr /C:"Invalid tunnel secret" >nul
+if not errorlevel 1 (
+    echo.
+    echo Cloudflare rechazo el token: Invalid tunnel secret.
+    echo Usa la opcion 13 para pegar el token nuevo desde Add replica.
+)
+pause
+goto menu
+
+:tunnel_logs
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker logs titoflix-cloudflared-tunnel
+pause
+goto menu
+
+:stop_tunnel
+call :check_docker
+if errorlevel 1 (
+    pause
+    goto menu
+)
+docker rm -f titoflix-cloudflared-tunnel
+pause
+goto menu
+
+:update_tunnel_token
+call :ensure_env
+if errorlevel 1 (
+    pause
+    goto menu
+)
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\set-cloudflare-token.ps1"
+pause
+goto menu
+
+:update_from_git
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\update-from-git.ps1"
+if "%ERRORLEVEL%"=="2" (
+    pause
+    goto menu
+)
+if errorlevel 1 (
+    pause
+    goto menu
+)
+goto rebuild
+
+:auto_update_from_git
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\auto-update.ps1"
+pause
+goto menu
+
+:ensure_env
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\ensure-env.ps1"
+if errorlevel 1 exit /b 1
+goto :eof
+
+:check_docker
+docker info >nul 2>nul
+if errorlevel 1 (
+    echo.
+    echo Docker no esta disponible.
+    echo Abri Docker Desktop y espera a que diga "Docker Desktop is running".
+    echo Si ya esta abierto, revisa que este usando el engine Linux de Docker Desktop.
+    exit /b 1
+)
+goto :eof
+
+:load_tunnel_token
+set "CLOUDFLARE_TUNNEL_TOKEN="
+for /f "usebackq tokens=1,* delims==" %%A in (".env") do (
+    if /i "%%A"=="CLOUDFLARE_TUNNEL_TOKEN" set "CLOUDFLARE_TUNNEL_TOKEN=%%B"
+)
+if "%CLOUDFLARE_TUNNEL_TOKEN%"=="" (
+    echo.
+    echo Falta CLOUDFLARE_TUNNEL_TOKEN en .env.
+    echo Copia el token del conector Docker en Cloudflare Zero Trust ^> Networks ^> Tunnels.
+    echo Debe quedar asi:
+    echo CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoi...
+    exit /b 1
+)
+goto :eof
+
+:write_host_ip
+powershell -NoProfile -Command "$hostIp='127.0.0.1'; foreach ($ip in Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue) { if ($ip.IPAddress -notlike '127.*' -and $ip.IPAddress -notlike '169.254.*' -and $ip.InterfaceOperationalStatus -eq 'Up') { $hostIp=$ip.IPAddress; break } }; if (Test-Path '.env') { $c=Get-Content '.env'; if ($c -match '^HOST_IP=') { $c = $c -replace '^HOST_IP=.*',('HOST_IP=' + $hostIp); Set-Content -Path '.env' -Value $c } else { Add-Content -Path '.env' -Value ('HOST_IP=' + $hostIp) } } else { Set-Content -Path '.env' -Value ('HOST_IP=' + $hostIp) }"
+goto :eof
+
+:wait_frontend_origin
+echo.
+echo Esperando a que el frontend responda en http://localhost:3000 ...
+powershell -NoProfile -Command "$ok=$false; for ($i=0; $i -lt 30; $i++) { try { $r=Invoke-WebRequest -UseBasicParsing 'http://localhost:3000' -TimeoutSec 3; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 500) { $ok=$true; break } } catch {}; Start-Sleep -Seconds 2 }; if (-not $ok) { Write-Host 'El frontend no responde en localhost:3000. Revisa la opcion 3 para ver logs.'; exit 1 }"
+if errorlevel 1 exit /b 1
+goto :eof
+
+:end
+endlocal

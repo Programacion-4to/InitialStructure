@@ -1,36 +1,120 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Titoflix Frontend
 
-## Getting Started
+Frontend de Titoflix hecho con Next.js. Muestra login, seleccion y creacion de perfiles, catalogo, busqueda, Mi Lista, detalle de contenido, reproductor, continuar viendo y consola admin.
 
-First, run the development server:
+## Como correrlo
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Docker, recomendado
+
+Desde la raiz:
+
+```powershell
+docker compose up -d --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Solo frontend:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+docker compose build frontend
+docker compose up -d frontend
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Sin Docker
 
-## Learn More
+Desde `frontend/`:
 
-To learn more about Next.js, take a look at the following resources:
+```powershell
+npm install
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Para desarrollo local sin Docker, asegurarse de que el backend responda en la URL configurada.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## URLs
 
-## Deploy on Vercel
+- Local: `http://localhost:3000`
+- LAN: `http://[IP_LOCAL]:3000`
+- Tunel Cloudflare: `https://titoflix.watch`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+La API se consume por defecto con rutas relativas:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```text
+/api/v1
+```
+
+Next.js reescribe esas llamadas hacia `INTERNAL_BACKEND_URL`.
+
+## Variables
+
+Configuracion recomendada para Docker y Cloudflare Tunnel:
+
+```env
+NEXT_PUBLIC_API_URL=/api/v1
+NEXT_PUBLIC_DIRECT_API_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_BACKEND_URL=
+INTERNAL_BACKEND_URL=http://backend:8000
+NEXT_PUBLIC_MAX_UPLOAD_SIZE=10485760
+```
+
+Significado:
+
+- `NEXT_PUBLIC_API_URL`: base usada por el navegador para API normal.
+- `NEXT_PUBLIC_DIRECT_API_URL`: base alternativa para uploads grandes si se necesita evitar el proxy.
+- `NEXT_PUBLIC_BACKEND_URL`: prefijo para `stream_url`; vacio significa usar el mismo host.
+- `INTERNAL_BACKEND_URL`: destino interno del rewrite de Next.js.
+- `NEXT_PUBLIC_MAX_UPLOAD_SIZE`: limite cliente para imagenes/JSON; los videos no usan este limite.
+
+Para probar desde otro dispositivo sin proxy:
+
+```env
+NEXT_PUBLIC_API_URL=http://[IP_LOCAL]:8000/api/v1
+NEXT_PUBLIC_BACKEND_URL=http://[IP_LOCAL]:8000
+```
+
+## Funcionalidad
+
+- Registro con seleccion de plan.
+- Login normal y acceso admin.
+- Perfiles con avatar, PIN y selector Adulto/Infantil.
+- Menu de perfiles con cambio de perfil, ajustes y mejora de plan.
+- Busqueda y filtros por texto, genero, tipo y orden.
+- Catalogo separado en inicio, peliculas, series y Mi Lista.
+- Detalle de contenido con calidad disponible segun plan.
+- Reproducir, continuar y reproducir desde cero.
+- Reproductor con reporte de progreso cada pocos segundos.
+- Calificacion y eliminacion de calificacion.
+- Consola admin para catalogo, reportes y permisos admin del admin principal.
+
+## Consola admin
+
+La ruta `/admin` solo permite cuentas con `is_admin=true`.
+
+El admin principal hardcodeado es la cuenta ID `1`. Solo esa cuenta ve la pestaña `Permisos`, donde puede activar o quitar permisos admin a otras cuentas. No puede quitarse admin a si misma.
+
+## Streaming
+
+El frontend pide `/playback` al backend, recibe un `stream_url` con token temporal y lo pasa al reproductor.
+
+Si `NEXT_PUBLIC_BACKEND_URL` esta vacio, el stream queda en el mismo dominio:
+
+```text
+/api/v1/contenidos/{id}/stream?token=...&quality=...
+```
+
+Esto funciona con Docker y Cloudflare porque el frontend proxyea `/api/v1`.
+
+## MinIO
+
+El frontend no accede directo a MinIO. Las imagenes y videos pasan por el backend:
+
+- Portadas, miniaturas y avatars: `/api/v1/assets/...`
+- Videos: `/api/v1/.../stream`
+
+MinIO Console queda para administracion en `http://localhost:9001`.
+
+## Documentacion relacionada
+
+- General: `../README.md`
+- Docker: `../DOCKER.md`
+- Backend: `../backend/README.md`
+- Modelo de datos: `../docs/modelo-datos.md`

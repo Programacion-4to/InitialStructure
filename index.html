@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TITOFLIX</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    body {
+      background: #080808;
+      color: white;
+      overflow-x: hidden;
+    }
+
+    .login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.9)),
+        url("https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?auto=format&fit=crop&w=1600&q=80");
+      background-size: cover;
+      background-position: center;
+      padding: 20px;
+    }
+
+    .login-box {
+      width: 100%;
+      max-width: 430px;
+      background: rgba(0,0,0,0.82);
+      padding: 45px 38px;
+      border-radius: 14px;
+      box-shadow: 0 20px 70px rgba(0,0,0,0.85);
+    }
+
+    .brand-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 1px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      line-height: 1;
+    }
+
+    .brand-logo span:nth-child(1),
+    .brand-logo span:nth-child(2),
+    .brand-logo span:nth-child(3) {
+      color: #009246;
+    }
+
+    .brand-logo span:nth-child(4),
+    .brand-logo span:nth-child(5) {
+      color: #ffffff;
+      text-shadow: 0 0 9px rgba(0, 0, 0, 0.8);
+    }
+
+    .brand-logo span:nth-child(6),
+    .brand-logo span:nth-child(7),
+    .brand-logo span:nth-child(8) {
+      color: #ce2b37;
+    }
+
+    .login-logo {
+      font-size: 38px;
+      margin-bottom: 28px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .login-box h1 {
+      font-size: 28px;
+      margin-bottom: 24px;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-group label {
+      display: block;
+      color: #ccc;
+      font-size: 14px;
+      margin-bottom: 7px;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 14px;
+      background: #222;
+      border: 1px solid #444;
+      border-radius: 5px;
+      color: white;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .input-group input:focus {
+      border-color: #e50914;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 5px;
+      background: #e50914;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .login-btn:hover {
+      background: #f6121d;
+    }
+
+    .login-help {
+      margin-top: 18px;
+      color: #aaa;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .error-message {
+      display: none;
+      margin-top: 14px;
+      color: #ff6b6b;
+      font-size: 14px;
+    }
+
+    .profile-screen,
+    .app {
+      display: none;
+    }
+
+    .profile-screen {
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      background:
+        linear-gradient(rgba(0,0,0,0.82), rgba(0,0,0,0.96)),
+        url("https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1600&q=80");
+      background-size: cover;
+      background-position: center;
+      padding: 28px;
+      text-align: center;
+    }
+
+    .profile-panel {
+      width: min(760px, 100%);
+    }
+
+    .profile-title {
+      font-size: clamp(32px, 6vw, 56px);
+      margin-bottom: 34px;
+    }
+
+    .profiles {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .profile-card {
+      width: 180px;
+      background: transparent;
+      color: #cfcfcf;
+      cursor: pointer;
+    }
+
+    .profile-avatar {
+      display: block;
+      width: 180px;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      border: 4px solid transparent;
+      background:
+        radial-gradient(circle at 50% 38%, #f4f4f4 0 18%, transparent 19%),
+        radial-gradient(circle at 50% 78%, #f4f4f4 0 34%, transparent 35%),
+        linear-gradient(135deg, #009246 0 33%, #f8f8f8 33% 66%, #ce2b37 66% 100%);
+      transition: 0.2s;
+    }
+
+    .profile-card:hover .profile-avatar,
+    .profile-card:focus-visible .profile-avatar {
+      border-color: white;
+      transform: translateY(-3px);
+    }
+
+    .profile-name {
+      display: block;
+      margin-top: 12px;
+      font-size: 22px;
+      color: #e8e8e8;
+    }
+
+    .profile-note {
+      max-width: 560px;
+      margin: 28px auto 0;
+      color: #aaa;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 70px;
+      padding: 0 45px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.95), rgba(0,0,0,0));
+      z-index: 100;
+    }
+
+    .logo {
+      font-size: 28px;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+    }
+
+    nav a {
+      color: #ddd;
+      text-decoration: none;
+      font-size: 15px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    nav a:hover {
+      color: white;
+    }
+
+    .right-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .profile-label {
+      color: #ddd;
+      font-size: 14px;
+    }
+
+    .logout-btn {
+      padding: 8px 12px;
+      background: rgba(229, 9, 20, 0.8);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .profile {
+      width: 35px;
+      height: 35px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #009246 0 33%, #f8f8f8 33% 66%, #ce2b37 66% 100%);
+    }
+
+    .hero {
+      height: 85vh;
+      min-height: 530px;
+      background-image: linear-gradient(to right, rgba(0,0,0,0.9), rgba(0,0,0,0.25), rgba(0,0,0,0.9)),
+        linear-gradient(to top, #080808, rgba(0,0,0,0)),
+        url("https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1600&q=80");
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: center;
+      padding: 90px 55px 0;
+    }
+
+    .hero-content {
+      max-width: 650px;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 6px 10px;
+      background: rgba(229, 9, 20, 0.85);
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 18px;
+    }
+
+    .hero h1 {
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: 0.95;
+      margin-bottom: 18px;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: #e5e5e5;
+      line-height: 1.45;
+      margin-bottom: 25px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    button {
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      border-radius: 5px;
+      transition: 0.2s;
+    }
+
+    .main-btn {
+      padding: 13px 28px;
+      background: white;
+      color: black;
+      font-size: 16px;
+    }
+
+    .info-btn {
+      padding: 13px 28px;
+      background: rgba(109,109,110,0.75);
+      color: white;
+      font-size: 16px;
+    }
+
+    .main-btn:hover, .info-btn:hover {
+      opacity: 0.75;
+    }
+
+    main {
+      position: relative;
+      z-index: 2;
+      padding: 35px 45px 70px;
+      margin-top: -60px;
+    }
+
+    .section {
+      margin-bottom: 36px;
+    }
+
+    .section h2 {
+      font-size: 23px;
+      margin-bottom: 14px;
+    }
+
+    .placeholder-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .placeholder-card {
+      min-height: 130px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #242424, #111);
+      border: 1px solid #2d2d2d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #888;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .backend-box {
+      max-width: 900px;
+      background: #151515;
+      border-left: 4px solid #e50914;
+      padding: 20px;
+      border-radius: 8px;
+      color: #ddd;
+      line-height: 1.5;
+    }
+
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .video-card {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      transition: 0.2s;
+    }
+
+    .video-card:hover {
+      background: #252525;
+    }
+
+    .video-link {
+      color: #ccc;
+      font-size: 16px;
+      text-decoration: none;
+      display: block;
+    }
+
+    .video-link:hover {
+      color: #e50914;
+    }
+
+    .empty-state {
+      background: #151515;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 40px 20px;
+      text-align: center;
+      color: #888;
+    }
+
+    .empty-state p {
+      font-size: 16px;
+    }
+
+    @media (max-width: 800px) {
+      header {
+        padding: 0 18px;
+      }
+
+      nav {
+        display: none;
+      }
+
+      .hero {
+        padding: 100px 22px 0;
+        height: 75vh;
+      }
+
+      .hero p {
+        font-size: 15px;
+      }
+
+      main {
+        padding: 25px 20px 60px;
+        margin-top: -40px;
+      }
+
+      .profile-card,
+      .profile-avatar {
+        width: 140px;
+      }
+
+      .profile-label {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section id="loginScreen" class="login-screen">
+    <div class="login-box">
+      <div class="brand-logo login-logo" aria-label="TITOFLIX">
+        <span>T</span><span>I</span><span>T</span><span>O</span><span>F</span><span>L</span><span>I</span><span>X</span>
+      </div>
+      <h1>Iniciar sesion</h1>
+
+      <form id="loginForm">
+        <div class="input-group">
+          <label for="username">Usuario</label>
+          <input id="username" type="text" placeholder="Ingresa tu usuario" autocomplete="username" />
+        </div>
+
+        <div class="input-group">
+          <label for="password">Contrasena</label>
+          <input id="password" type="password" placeholder="Ingresa tu contrasena" autocomplete="current-password" />
+        </div>
+
+        <button class="login-btn" type="submit">Entrar</button>
+        <p id="errorMessage" class="error-message">Usuario o contrasena incorrectos.</p>
+      </form>
+
+      <div class="login-help">
+        Cuenta de prueba:<br>
+        <b>Usuario:</b> pati<br>
+        <b>Contrasena:</b> 1234
+      </div>
+    </div>
+  </section>
+
+  <section id="profileScreen" class="profile-screen">
+    <div class="profile-panel">
+      <h1 class="profile-title">Quien esta mirando?</h1>
+      <div class="profiles">
+        <button class="profile-card" type="button" onclick="seleccionarPerfilInvitado()">
+          <span class="profile-avatar" aria-hidden="true"></span>
+          <span class="profile-name">Invitado</span>
+        </button>
+      </div>
+      <p class="profile-note">
+        Perfil temporal: no guarda historial, no recuerda lo visto y puede recibir recomendaciones generales
+        influenciadas por otras cuentas cuando el backend este conectado.
+      </p>
+    </div>
+  </section>
+
+  <div id="app" class="app">
+    <header>
+      <div class="brand-logo logo" aria-label="TITOFLIX">
+        <span>T</span><span>I</span><span>T</span><span>O</span><span>F</span><span>L</span><span>I</span><span>X</span>
+      </div>
+
+      <nav>
+        <a href="#">Inicio</a>
+        <a href="#">Peliculas</a>
+        <a href="#">Series</a>
+        <a href="#">Mi lista</a>
+      </nav>
+
+      <div class="right-nav">
+        <button class="logout-btn" onclick="cerrarSesion()">Salir</button>
+        <span class="profile-label">Invitado</span>
+        <div class="profile"></div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-content">
+        <span class="tag">BIENVENIDO</span>
+        <h1>TITOFLIX</h1>
+        <p>
+          Tu pagina estilo streaming. Esta version todavia no tiene videos cargados:
+          esta lista para que el backend en Python traiga el contenido desde una base de datos.
+        </p>
+        <div class="hero-buttons">
+          <button class="main-btn">Explorar</button>
+          <button class="info-btn">Como funciona</button>
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <section class="section">
+        <h2>Videos de ejemplo</h2>
+        <div class="video-grid">
+          <div class="video-card">
+            <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank" class="video-link">Video de ejemplo 1</a>
+          </div>
+          <div class="video-card">
+            <a href="https://www.youtube.com/watch?v=jNQXAC9IVRw" target="_blank" class="video-link">Video de ejemplo 2</a>
+          </div>
+          <div class="video-card">
+            <a href="https://www.youtube.com/watch?v=9bZkp7q19f0" target="_blank" class="video-link">Video de ejemplo 3</a>
+          </div>
+          <div class="video-card">
+            <a href="https://www.youtube.com/watch?v=5EouEAo9wy0&list=RD5EouEAo9wy0&start_radio=1&pp=ygUIbWUgbGxhbWGgBwE%3D" target="_blank" class="video-link">Video de ejemplo 4</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Contenido principal</h2>
+        <div class="placeholder-grid">
+          <div class="placeholder-card">Aca van las cards que lleguen desde Python</div>
+          <div class="placeholder-card">Titulo, imagen, descripcion y link</div>
+          <div class="placeholder-card">Seccion preparada para videos</div>
+          <div class="placeholder-card">Sin videos hardcodeados</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Peliculas y Videos</h2>
+        <div class="empty-state">
+          <p>No hay peliculas/videos/series para ver en este momento. Intentar mas tarde.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Conexion con backend</h2>
+        <div class="backend-box">
+          El frontend ya tiene la pantalla de login, la seleccion de perfil y la pagina principal. Ahora el backend deberia encargarse de:
+          validar usuarios, revisar si existen en la base de datos y devolver los videos disponibles.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Cuenta de prueba para que puedan entrar ahora mismo.
+    // Despues esto se reemplaza por una peticion al backend en Python.
+    const cuentaDePrueba = {
+      usuario: "pati",
+      contrasena: "1234"
+    };
+
+    const loginForm = document.getElementById("loginForm");
+    const loginScreen = document.getElementById("loginScreen");
+    const profileScreen = document.getElementById("profileScreen");
+    const app = document.getElementById("app");
+    const errorMessage = document.getElementById("errorMessage");
+
+    loginForm.addEventListener("submit", function(event) {
+      event.preventDefault();
+
+      const usuario = document.getElementById("username").value.trim();
+      const contrasena = document.getElementById("password").value.trim();
+
+      if (usuario === cuentaDePrueba.usuario && contrasena === cuentaDePrueba.contrasena) {
+        loginScreen.style.display = "none";
+        profileScreen.style.display = "flex";
+        app.style.display = "none";
+        errorMessage.style.display = "none";
+      } else {
+        errorMessage.style.display = "block";
+      }
+    });
+
+    function seleccionarPerfilInvitado() {
+      profileScreen.style.display = "none";
+      app.style.display = "block";
+    }
+
+    function cerrarSesion() {
+      app.style.display = "none";
+      profileScreen.style.display = "none";
+      loginScreen.style.display = "flex";
+      errorMessage.style.display = "none";
+      document.getElementById("username").value = "";
+      document.getElementById("password").value = "";
+    }
+  </script>
+</body>
+</html>

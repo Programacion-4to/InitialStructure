@@ -1,2 +1,199 @@
-# TODO: definir CreateProductSchema y UpdateProductSchema con Pydantic
-# Seguí el patrón de user_schema.py
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+TipoContenido = Literal["pelicula", "serie"]
+ClasificacionEdad = Literal["ATP", "+13", "+16", "+18"]
+
+
+class GeneroSchema(BaseModel):
+    id: int
+    nombre: str
+
+    model_config = {"from_attributes": True}
+
+
+class CreateContenidoSchema(BaseModel):
+    titulo: str = Field(min_length=1)
+    tipo: TipoContenido
+    anio: int = Field(ge=1900)
+    descripcion: str | None = None
+    clasificacion_edad: ClasificacionEdad
+    generos_ids: list[int] = Field(default_factory=list)
+
+
+class UpdateContenidoSchema(BaseModel):
+    titulo: str | None = Field(default=None, min_length=1)
+    tipo: TipoContenido | None = None
+    anio: int | None = Field(default=None, ge=1900)
+    descripcion: str | None = None
+    clasificacion_edad: ClasificacionEdad | None = None
+    generos_ids: list[int] | None = None
+
+
+class ContenidoSchema(BaseModel):
+    id: int
+    titulo: str
+    tipo: TipoContenido
+    anio: int
+    descripcion: str | None = None
+    duracion_min: float | None = None
+    clasificacion_edad: ClasificacionEdad
+    promedio_calificaciones: float | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class CreateTemporadaSchema(BaseModel):
+    contenido_id: int
+    numero: int = Field(ge=1)
+    anio: int = Field(ge=1900)
+
+
+class UpdateTemporadaSchema(BaseModel):
+    numero: int | None = Field(default=None, ge=1)
+    anio: int | None = Field(default=None, ge=1900)
+
+
+class CreateEpisodioSchema(BaseModel):
+    temporada_id: int
+    numero: int = Field(ge=1)
+    titulo: str = Field(min_length=1)
+
+
+class UpdateEpisodioSchema(BaseModel):
+    numero: int | None = Field(default=None, ge=1)
+    titulo: str | None = Field(default=None, min_length=1)
+
+
+class UpsertVistaSchema(BaseModel):
+    episodio_id: int | None = None
+    contenido_id: int | None = None
+    segundos_vistos: int = Field(default=0, ge=0)
+    terminado: bool = False
+
+
+class UpsertCalificacionSchema(BaseModel):
+    puntaje: int = Field(ge=1, le=5)
+
+
+CreateVistaSchema = UpsertVistaSchema
+CreateCalificacionSchema = UpsertCalificacionSchema
+
+
+class MiListaSchema(BaseModel):
+    perfil_id: int
+    contenido_id: int
+
+
+class AddMiListaSchema(BaseModel):
+    contenido_id: int
+
+
+class CreateDescargaSchema(BaseModel):
+    episodio_id: int | None = None
+    contenido_id: int | None = None
+
+
+class VistaSchema(BaseModel):
+    id: int
+    perfil_id: int
+    episodio_id: int | None = None
+    contenido_id: int | None = None
+    fecha: datetime | None = None
+    segundos_vistos: int
+    terminado: bool
+
+    model_config = {"from_attributes": True}
+
+
+class CalificacionSchema(BaseModel):
+    id: int
+    perfil_id: int
+    contenido_id: int
+    puntaje: int
+    fecha: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class GeneroBaseSchema(BaseModel):
+    nombre: str = Field(min_length=1)
+
+
+GeneroCreateSchema = GeneroBaseSchema
+GeneroUpdateSchema = GeneroBaseSchema
+GeneroReadSchema = GeneroSchema
+
+
+class ContenidoBaseSchema(BaseModel):
+    titulo: str = Field(min_length=1)
+    tipo: TipoContenido
+    anio: int = Field(ge=1900)
+    descripcion: str | None = None
+    clasificacion_edad: ClasificacionEdad
+
+
+ContenidoCreateSchema = CreateContenidoSchema
+ContenidoUpdateSchema = UpdateContenidoSchema
+ContenidoReadSchema = ContenidoSchema
+
+
+class TemporadaBaseSchema(BaseModel):
+    contenido_id: int
+    numero: int = Field(ge=1)
+    anio: int = Field(ge=1900)
+
+
+TemporadaCreateSchema = CreateTemporadaSchema
+TemporadaUpdateSchema = UpdateTemporadaSchema
+
+
+class TemporadaReadSchema(TemporadaBaseSchema):
+    id: int
+
+    model_config = {"from_attributes": True}
+
+
+class EpisodioBaseSchema(BaseModel):
+    temporada_id: int
+    numero: int = Field(ge=1)
+    titulo: str = Field(min_length=1)
+
+
+EpisodioCreateSchema = CreateEpisodioSchema
+EpisodioUpdateSchema = UpdateEpisodioSchema
+
+
+class EpisodioReadSchema(EpisodioBaseSchema):
+    id: int
+    duracion_min: float
+
+    model_config = {"from_attributes": True}
+
+
+VistaBaseSchema = UpsertVistaSchema
+VistaCreateSchema = CreateVistaSchema
+VistaUpdateSchema = UpsertVistaSchema
+VistaReadSchema = VistaSchema
+
+CalificacionBaseSchema = UpsertCalificacionSchema
+CalificacionCreateSchema = CreateCalificacionSchema
+CalificacionUpdateSchema = UpsertCalificacionSchema
+CalificacionReadSchema = CalificacionSchema
+
+DescargaBaseSchema = CreateDescargaSchema
+DescargaCreateSchema = CreateDescargaSchema
+DescargaUpdateSchema = CreateDescargaSchema
+
+
+class DescargaReadSchema(CreateDescargaSchema):
+    id: int
+    perfil_id: int
+    fecha_descarga: datetime | None = None
+    vence_en: datetime
+    eliminada: bool
+
+    model_config = {"from_attributes": True}
