@@ -6,7 +6,7 @@ from src.config.env import settings
 from src.utils.errors import UnauthorizedError
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 
 def create_access_token(data: dict) -> str:

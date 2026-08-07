@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.middlewares.error_middleware import app_error_handler
 from src.routers import (
@@ -9,7 +10,6 @@ from src.routers import (
     multiplicador_horario_router,
     pasajero_router,
     tarifa_router,
-    user_router,
     vehiculo_router,
     viaje_router,
 )
@@ -17,9 +17,16 @@ from src.utils.errors import AppError
 
 app = FastAPI(title="Initial Structure API")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.add_exception_handler(AppError, app_error_handler)
 
-app.include_router(user_router.router, prefix="/api")
 app.include_router(auth_router.router, prefix="/api")
 app.include_router(pasajero_router.router, prefix="/api")
 app.include_router(conductores_router.router, prefix="/api")

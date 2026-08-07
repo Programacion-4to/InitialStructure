@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MapPicker } from "@/components/MapPicker";
+import type { LatLng } from "@/lib/geo";
 
 export const Route = createFileRoute("/solicitar")({ component: Page });
 
@@ -21,15 +23,18 @@ function Page() {
   const nav = useNavigate();
   const [pasajero_id, setPas] = useState("");
   const [metodo_pago_id, setMP] = useState("");
-  const [origen, setOrigen] = useState("");
-  const [destino, setDestino] = useState("");
-  const [distancia_km, setKm] = useState(5);
+  const [origen, setOrigen] = useState<LatLng | null>(null);
+  const [destino, setDestino] = useState<LatLng | null>(null);
+  const [origenLabel, setOrigenLabel] = useState("");
+  const [destinoLabel, setDestinoLabel] = useState("");
+  const [distancia_km, setKm] = useState<number | null>(null);
   const [categoria, setCat] = useState<CategoriaVehiculo>("economico");
   const [cupon, setCupon] = useState("");
 
   const metodos = pasajero_id ? metodosPago.filter((m) => m.pasajero_id === pasajero_id) : [];
 
   const preview = useMemo(() => {
+    if (distancia_km == null) return null;
     const t = tarifas.find((x) => x.categoria === categoria && x.activa);
     if (!t) return null;
     const now = new Date();
@@ -46,12 +51,16 @@ function Page() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (distancia_km == null) {
+      toast.error("Marcá origen y destino en el mapa");
+      return;
+    }
     try {
       const r = solicitarViaje({
         pasajero_id,
         metodo_pago_id,
-        origen,
-        destino,
+        origen: origenLabel,
+        destino: destinoLabel,
         distancia_km,
         categoria,
         cupon_codigo: cupon || undefined,
@@ -65,7 +74,7 @@ function Page() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <Card>
         <CardHeader>
           <CardTitle>Solicitar viaje (HU5 / HU6 / HU11 / HU13)</CardTitle>
@@ -98,24 +107,32 @@ function Page() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Origen</Label>
-                <Input value={origen} onChange={(e) => setOrigen(e.target.value)} required />
-              </div>
-              <div>
-                <Label>Destino</Label>
-                <Input value={destino} onChange={(e) => setDestino(e.target.value)} required />
-              </div>
-            </div>
+
+            <MapPicker
+              origen={origen}
+              destino={destino}
+              origenLabel={origenLabel}
+              destinoLabel={destinoLabel}
+              onOrigenChange={(p, l) => {
+                setOrigen(p);
+                setOrigenLabel(l);
+              }}
+              onDestinoChange={(p, l) => {
+                setDestino(p);
+                setDestinoLabel(l);
+              }}
+              onDistanciaChange={setKm}
+            />
+
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Distancia (km)</Label>
                 <Input
                   type="number"
-                  step="0.1"
-                  value={distancia_km}
-                  onChange={(e) => setKm(Number(e.target.value))}
+                  step="0.01"
+                  value={distancia_km ?? ""}
+                  readOnly
+                  placeholder="Marcá origen y destino"
                 />
               </div>
               <div>
@@ -141,12 +158,20 @@ function Page() {
                   <span className="text-primary"> · Horario pico ×{preview.factor}</span>
                 )}
               </div>
+            ) : distancia_km == null ? (
+              <div className="rounded-md border p-3 text-sm text-muted-foreground">
+                Marcá origen y destino en el mapa para calcular la tarifa.
+              </div>
             ) : (
               <div className="rounded-md border p-3 text-sm text-destructive">
                 No hay tarifa activa para {categoria}. Definila en la pestaña "Tarifas".
               </div>
             )}
-            <Button type="submit" className="w-full" disabled={!preview || !metodo_pago_id}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!preview || !metodo_pago_id || distancia_km == null}
+            >
               Pedir viaje
             </Button>
           </form>

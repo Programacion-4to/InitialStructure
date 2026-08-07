@@ -18,6 +18,7 @@ import { Route as RankingRouteImport } from './routes/ranking'
 import { Route as PasajerosRouteImport } from './routes/pasajeros'
 import { Route as MultiplicadoresRouteImport } from './routes/multiplicadores'
 import { Route as MetodosPagoRouteImport } from './routes/metodos-pago'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistorialRouteImport } from './routes/historial'
 import { Route as CuponesRouteImport } from './routes/cupones'
 import { Route as ConductoresRouteImport } from './routes/conductores'
@@ -69,6 +70,11 @@ const MetodosPagoRoute = MetodosPagoRouteImport.update({
   path: '/metodos-pago',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HistorialRoute = HistorialRouteImport.update({
   id: '/historial',
   path: '/historial',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/conductores': typeof ConductoresRoute
   '/cupones': typeof CuponesRoute
   '/historial': typeof HistorialRoute
+  '/login': typeof LoginRoute
   '/metodos-pago': typeof MetodosPagoRoute
   '/multiplicadores': typeof MultiplicadoresRoute
   '/pasajeros': typeof PasajerosRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/conductores': typeof ConductoresRoute
   '/cupones': typeof CuponesRoute
   '/historial': typeof HistorialRoute
+  '/login': typeof LoginRoute
   '/metodos-pago': typeof MetodosPagoRoute
   '/multiplicadores': typeof MultiplicadoresRoute
   '/pasajeros': typeof PasajerosRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/conductores': typeof ConductoresRoute
   '/cupones': typeof CuponesRoute
   '/historial': typeof HistorialRoute
+  '/login': typeof LoginRoute
   '/metodos-pago': typeof MetodosPagoRoute
   '/multiplicadores': typeof MultiplicadoresRoute
   '/pasajeros': typeof PasajerosRoute
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/conductores'
     | '/cupones'
     | '/historial'
+    | '/login'
     | '/metodos-pago'
     | '/multiplicadores'
     | '/pasajeros'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/conductores'
     | '/cupones'
     | '/historial'
+    | '/login'
     | '/metodos-pago'
     | '/multiplicadores'
     | '/pasajeros'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/conductores'
     | '/cupones'
     | '/historial'
+    | '/login'
     | '/metodos-pago'
     | '/multiplicadores'
     | '/pasajeros'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   ConductoresRoute: typeof ConductoresRoute
   CuponesRoute: typeof CuponesRoute
   HistorialRoute: typeof HistorialRoute
+  LoginRoute: typeof LoginRoute
   MetodosPagoRoute: typeof MetodosPagoRoute
   MultiplicadoresRoute: typeof MultiplicadoresRoute
   PasajerosRoute: typeof PasajerosRoute
@@ -277,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MetodosPagoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/historial': {
       id: '/historial'
       path: '/historial'
@@ -321,6 +341,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConductoresRoute: ConductoresRoute,
   CuponesRoute: CuponesRoute,
   HistorialRoute: HistorialRoute,
+  LoginRoute: LoginRoute,
   MetodosPagoRoute: MetodosPagoRoute,
   MultiplicadoresRoute: MultiplicadoresRoute,
   PasajerosRoute: PasajerosRoute,
@@ -334,3 +355,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

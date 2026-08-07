@@ -7,8 +7,21 @@ class UserRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, email: str, password_hash: str, age: int) -> User:
-        user = User(email=email, password_hash=password_hash, age=age)
+    def create(
+        self,
+        email: str,
+        password_hash: str,
+        role: str,
+        pasajero_id: int | None = None,
+        conductor_id: int | None = None,
+    ) -> User:
+        user = User(
+            email=email,
+            password_hash=password_hash,
+            role=role,
+            pasajero_id=pasajero_id,
+            conductor_id=conductor_id,
+        )
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
@@ -19,15 +32,3 @@ class UserRepository:
 
     def find_by_email(self, email: str) -> User | None:
         return self.db.query(User).filter(User.email == email).first()
-
-    def list_all(self) -> list[User]:
-        # TODO: devolver todos los usuarios
-        ...
-
-    def update(self, user_id: int, **fields) -> User | None:
-        # TODO: actualizar los campos pasados en **fields y devolver el User actualizado
-        ...
-
-    def delete(self, user_id: int) -> bool:
-        # TODO: borrar el User con ese id; devolver True si lo borró, False si no existía
-        ...

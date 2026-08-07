@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.sql import func
 
 from src.db.connection import Base
@@ -10,6 +10,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     email = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    age = Column(Integer, nullable=False)
-    is_admin = Column(Boolean, default=False)
+    role = Column(String, nullable=False)  # 'pasajero' | 'conductor' | 'admin'
+    pasajero_id = Column(Integer, ForeignKey("pasajeros.id"), nullable=True)
+    conductor_id = Column(Integer, ForeignKey("conductores.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())

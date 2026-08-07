@@ -4,14 +4,19 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
+  useNavigate,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
 
 function NotFoundComponent() {
   return (
@@ -113,6 +118,28 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const session = useAuth((s) => s.session);
+  const logout = useAuth((s) => s.logout);
+  const nav = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isLoginRoute = pathname === "/login";
+
+  useEffect(() => {
+    if (!session && !isLoginRoute) {
+      nav({ to: "/login" });
+    }
+  }, [session, isLoginRoute, nav]);
+
+  if (isLoginRoute) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Outlet />
+        <Toaster theme="dark" richColors position="top-right" />
+      </QueryClientProvider>
+    );
+  }
+
+  if (!session) return null;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -122,7 +149,20 @@ function RootComponent() {
           <div className="flex-1 flex flex-col">
             <header className="h-12 flex items-center border-b px-3 gap-2">
               <SidebarTrigger />
-              <span className="text-sm text-muted-foreground">Panel UBER · Mock</span>
+              <span className="text-sm text-muted-foreground">Panel UBER · {session.role}</span>
+              <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                <span>#{session.user_id}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    logout();
+                    nav({ to: "/login" });
+                  }}
+                >
+                  Salir
+                </Button>
+              </div>
             </header>
             <main className="flex-1 p-6">
               <Outlet />

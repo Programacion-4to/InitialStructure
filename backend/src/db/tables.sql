@@ -1,3 +1,14 @@
+-- 0. Usuarios (auth)
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('pasajero', 'conductor', 'admin')),
+    pasajero_id INTEGER REFERENCES pasajeros(id),
+    conductor_id INTEGER REFERENCES conductores(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 1. Catálogo de Tarifas (HU4)
 CREATE TABLE tarifas (
     id SERIAL PRIMARY KEY,
