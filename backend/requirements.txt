@@ -8,3 +8,11 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 alembic==1.13.3
 psycopg2-binary==2.9.10
+<<<<<<< Updated upstream
+=======
+python-multipart==0.0.12
+boto3==1.35.52
+dramatiq[redis]==1.17.1
+redis==5.2.1
+alembic==1.13.3
+>>>>>>> Stashed changes
