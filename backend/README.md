@@ -25,14 +25,21 @@ Estructura base de un proyecto en capas (routers, services, repositories, models
 ## Setup
 
 ```bash
+cd backend # Si no les deja deber ser porque es: cd .\backend\
 python -m venv venv
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 source venv/bin/activate          # Linux/Mac
 # venv\Scripts\Activate.ps1       # Windows
 
 pip install -r requirements.txt
 cp .env.example .env               # editá con tus credenciales
 
-uvicorn src.app:app --reload
+# Editar el .env en la parte de conexion con la base de datos. Tiene que quedarles algo asi:
+
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/{nombre de la base}
+
+uvicorn src.app:app --reload #uvicorn src.main:main --reload #uvicorn src.main:app --reload
+
 ```
 
 Abrir http://localhost:8000/docs para ver Swagger.
