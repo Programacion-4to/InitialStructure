@@ -70,3 +70,5 @@ Antes de que se manden a hacer de todo, arranquen con estos pasos pero solo para
 8) Vamos a `app.py` y añadimos el router a la API
 
 9) Sigo los pasos de los comandos que hay en `/backend/README.md` para levantar la API
+
+10) Abrir `http://localhost:8000/docs` y probar la API
