@@ -82,7 +82,7 @@ Secciones que debe tener:
 - la documentacion de la API (Swagger)
 - la documentacion de la base de datos (pgAdmin)
 
-1) Readme.md: debe contener pantallas/secciones del frontend y que se puede realizar en cada una, explicacion del diferencial y explicacion de algun algoritmo que hayan hecho (ejemplo recomendacion de peliculas, busqueda de productos, etc.) y como funciona. Con que realizaron el frontend. Separacion de carpetas y explicacion de que hace cada una. Que tecnologias utilizaron y porque. Que problemas tuvieron y como los resolvieron. Que aprendieron y que les gustaria aprender. Al final dejar quien hizo que y que se llevo de la materia.
+1) Readme.md: debe contener pantallas/secciones del frontend y que se puede realizar en cada una, explicacion del diferencial y explicacion de algun algoritmo que hayan hecho (ejemplo recomendacion de peliculas, busqueda de productos, etc.) y como funciona. Con que realizaron el frontend. Que problemas tuvieron y como los resolvieron. Que aprendieron y que les gustaria aprender. Al final dejar quien hizo que y que se llevo de la materia.
 
 2) Documentacion de la API: debe contener todos los endpoints, que hacen, que parametros reciben y que devuelven. Esto lo hace automaticamente FastAPI con Swagger (http://localhost:8000/docs)
 
