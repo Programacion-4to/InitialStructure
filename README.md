@@ -72,3 +72,18 @@ Antes de que se manden a hacer de todo, arranquen con estos pasos pero solo para
 9) Sigo los pasos de los comandos que hay en `/backend/README.md` para levantar la API
 
 10) Abrir `http://localhost:8000/docs` y probar la API
+
+
+
+## Documentacion
+
+Secciones que debe tener: 
+- el README.md del proyecto, 
+- la documentacion de la API (Swagger)
+- la documentacion de la base de datos (pgAdmin)
+
+1) Readme.md: debe contener pantallas/secciones del frontend y que se puede realizar en cada una, explicacion del diferencial y explicacion de algun algoritmo que hayan hecho (ejemplo recomendacion de peliculas, busqueda de productos, etc.) y como funciona. Con que realizaron el frontend. Separacion de carpetas y explicacion de que hace cada una. Que tecnologias utilizaron y porque. Que problemas tuvieron y como los resolvieron. Que aprendieron y que les gustaria aprender. Al final dejar quien hizo que y que se llevo de la materia.
+
+2) Documentacion de la API: debe contener todos los endpoints, que hacen, que parametros reciben y que devuelven. Esto lo hace automaticamente FastAPI con Swagger (http://localhost:8000/docs)
+
+3) Documentacion de la base de datos: debe contener todas las tablas, que columnas tienen, que relaciones tienen y que datos se pueden guardar en cada columna. Esto lo hace automaticamente pgAdmin (https://www.pgadmin.org/)
